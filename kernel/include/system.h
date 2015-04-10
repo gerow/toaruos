@@ -90,7 +90,17 @@ struct regs {
 
 typedef struct regs regs_t;
 
-typedef void (*irq_handler_t) (struct regs *);
+/* IRQ */
+#define IRQ_HANDLED 0
+#define IRQ_NOT_HANDLED 1
+typedef int (*irq_handler_t) (struct regs *, void * device);
+
+struct irq_entry {
+	irq_handler_t handler;
+	void *device;
+};
+
+typedef struct irq_entry irq_entry_t;
 
 /* Panic */
 #define HALT_AND_CATCH_FIRE(mesg, regs) halt_and_catch_fire(mesg, __FILE__, __LINE__, regs)

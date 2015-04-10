@@ -17,7 +17,8 @@ static void find_hda(uint32_t device, uint16_t vendorid, uint16_t deviceid, void
 
 	struct hda_device * hda = extra;
 
-	if ((vendorid == 0x8086) && (deviceid == 0x2668)) {
+	if (((vendorid == 0x8086) && (deviceid == 0x2668 || deviceid == 0x27d8)) ||
+	    ((vendorid == 0x1002) && (deviceid == 0x4383))) {
 		hda->pci_device = device;
 	}
 

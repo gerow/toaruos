@@ -278,6 +278,7 @@ static void scan_hit_list(uint32_t device, uint16_t vendorid, uint16_t deviceid,
 	fprintf(tty, " BAR3: 0x%8x\n", pci_read_field(device, PCI_BAR3, 4));
 	fprintf(tty, " BAR4: 0x%8x\n", pci_read_field(device, PCI_BAR4, 4));
 	fprintf(tty, " BAR6: 0x%8x\n", pci_read_field(device, PCI_BAR5, 4));
+	fprintf(tty, " IRQ : %d\n", pci_read_field(device, PCI_INTERRUPT_LINE, 1));
 
 }
 
