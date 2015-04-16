@@ -67,7 +67,7 @@ void pci_scan_func(pci_func_t f, int type, int bus, int slot, int func, void * e
 void pci_scan_slot(pci_func_t f, int type, int bus, int slot, void * extra);
 void pci_scan_bus(pci_func_t f, int type, int bus, void * extra);
 void pci_scan(pci_func_t f, int type, void * extra);
-uint32_t pci_space_requested(uint32_t dev, int bar);
+uint32_t pci_bar_requested(uint32_t dev, int bar);
 
 
 #endif

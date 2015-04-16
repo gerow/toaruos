@@ -111,7 +111,7 @@ void pci_scan(pci_func_t f, int type, void * extra) {
 	}
 }
 
-uint32_t pci_bar_space_requested(uint32_t dev, int bar) {
+uint32_t pci_bar_requested(uint32_t dev, int bar) {
 	uint32_t orig = pci_read_field(dev, bar, 4);
 	pci_write_field(dev, bar, 4, (uint32_t) -1);
 	uint32_t space_requested = pci_read_field(dev, bar, 4);

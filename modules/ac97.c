@@ -1,5 +1,7 @@
 /*
- * Intel AC'97 Driver
+ * Driver for the Intel AC'97.
+ *
+ * See <http://www.intel.com/design/chipsets/manuals/29802801.pdf>.
  */
 
 #include <logging.h>
@@ -8,6 +10,12 @@
 #include <printf.h>
 #include <pci.h>
 #include <system.h>
+
+#define AC97_RESET             0x00
+#define AC97_MASTER_VOLUME     0x02
+#define AC97_AUX_OUT_VOLUME    0x04
+#define AC97_MONO_VOLUME       0x06
+#define AC97_PCM_OUT_VOLUME    0x18
 
 struct ac97_device {
 	uint32_t pci_device;
@@ -45,24 +53,10 @@ static int init(void) {
 	if (!_device.pci_device) {
 		return 1;
 	}
-	/*
-	 * Look for an IRQ to use. Only 9, 10, and 11 are technically free for anyone to use.
-	 * Ideally we should actually have routines that can share IRQs.
-	 */
-	_device.irq = -1;
-	/* XXX: This is _NOT_ thread safe. */
-	for (int i = 9; i <= 11; i++) {
-		if (irq_is_handler_free(i)) {
-			_device.irq = i;
-			break;
-		}
-	}
-	if (_device.irq == -1) {
-		debug_print(WARNING, "Could not find a free IRQ for AC'97 device.");
-		return 1;
-	}
-	pci_write_field(_device.pci_device, PCI_INTERRUPT_LINE, 1, _device.irq);
-	debug_print(INFO, "IRQ for AC'97 set to %d.", _device.irq);
+	uint32_t mixer_port = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
+	/* Turn it up! */
+	outports(mixer_port + AC97_MASTER_VOLUME, 0);
+	outports(mixer_port + AC97_PCM_OUT_VOLUME, 0);
 	return 0;
 }
 
