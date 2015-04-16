@@ -42,6 +42,10 @@ void irq_uninstall_handler(size_t irq) {
 	irq_routines[irq] = 0;
 }
 
+int irq_is_handler_free(size_t irq) {
+	return irq_routines[irq] == NULL;
+}
+
 /*
  * Remap interrupt handlers
  */
