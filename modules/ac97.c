@@ -11,15 +11,35 @@
 #include <pci.h>
 #include <system.h>
 
+#define AC97_NAMBAR PCI_BAR0  /* Native Audio Mixer Base Address Register */
+#define AC97_NABMBAR PCI_BAR1  /* Native Audio Bus Mastering Base Address Register */
+
+/* Bus mastering offsets */
+#define AC97_PCM_OUT_BDL_BASE AC97_NAMBAR
+
+/* Mixer settings */
 #define AC97_RESET             0x00
 #define AC97_MASTER_VOLUME     0x02
 #define AC97_AUX_OUT_VOLUME    0x04
 #define AC97_MONO_VOLUME       0x06
 #define AC97_PCM_OUT_VOLUME    0x18
 
+struct ac97_bdl_entry {
+	uint32_t pointer;
+	uint32_t control_and_length;
+} __attribute__((packed));
+
 struct ac97_device {
 	uint32_t pci_device;
 	int irq;
+	struct ac97_bdl_entry *buffer_descriptor_list[32];
+};
+
+struct buffer_descriptor_entry {
+	uint32_t ioc : 1;
+	uint32_t bup : 1;
+	uint32_t reserved : 14;
+	uint32_t buffer_length : 16;
 };
 
 static struct ac97_device _device;
@@ -57,10 +77,14 @@ static int init(void) {
 	/* Turn it up! */
 	outports(mixer_port + AC97_MASTER_VOLUME, 0);
 	outports(mixer_port + AC97_PCM_OUT_VOLUME, 0);
+
+	/* Allocate our buffer descriptor list */
+	_device.buffer_descriptor_list = malloc(sizeof(*_device.buffer_descriptor_list));
 	return 0;
 }
 
 static int fini(void) {
+	free(_device.buffer_descriptor_list);
 	return 0;
 }
 
