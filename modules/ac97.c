@@ -24,6 +24,8 @@
 #define AC97_POBDBAR AC97_NABMBAR + 0x10
 /* PCM out last valid index */
 #define AC97_POLVI AC97_NABMBAR + 0x15
+/* PCM out control register */
+#define AC97_PO_CR AC97_NABMBAR + 0x1b
 
 /* Mixer settings */
 #define AC97_RESET             0x00
@@ -33,8 +35,7 @@
 #define AC97_PCM_OUT_VOLUME    0x18
 
 struct ac97_bdl_entry {
-	/* XXX(gerow): This relies on 32-bit addressing, probably bad */
-	uint16_t *pointer;
+	uint32_t pointer;
 	uint32_t control_and_length;
 } __attribute__((packed));
 
@@ -71,25 +72,52 @@ DEFINE_SHELL_FUNCTION(ac97_test, "[debug] Intel AC'97 experiments") {
 	size_t irq = pci_read_field(_device.pci_device, PCI_INTERRUPT_LINE, 1);
 	fprintf(tty, "AC'97 audio device is at 0x%x.\n", _device.pci_device);
 	fprintf(tty, "IRQ: %d\n", irq);
+	uint16_t command_register = pci_read_field(_device.pci_device, PCI_COMMAND, 2);
+	fprintf(tty, "COMMAND: 0x%04x\n", command_register);
+
+	return 0;
+}
+
+DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
+	/* Allocate a buffer and fill it with noise */
+	uint16_t *buf = (uint16_t *)kvmalloc_p(1 << 15, &_device.bdl[0].pointer);
+	uint16_t val = 0xf179;
+	for (int i = 0; i < 1 << 15; i++) {
+		buf[i] = val;
+		if (val & 0x8000) {
+			val = (val << 1) | 1;
+		} else {
+			val = val << 1;
+		}
+	}
+	AC97_CL_SET_LENGTH(_device.bdl[0].control_and_length, 1 << 15);
+
+	/* Give it our buffer descriptor list */
+	pci_write_field(_device.pci_device, AC97_POBDBAR, 4,
+			(uint32_t) map_to_physical((uintptr_t) &_device.bdl));
+	pci_write_field(_device.pci_device, AC97_POLVI, 1, 1);
+	/* Set it to run! */
+	outportb(AC97_PO_CR, 1);
 
 	return 0;
 }
 
 static int init(void) {
 	BIND_SHELL_FUNCTION(ac97_test);
+	BIND_SHELL_FUNCTION(ac97_noise);
 	pci_scan(&find_ac97, -1, &_device);
 	if (!_device.pci_device) {
 		return 1;
 	}
+	/* Enable bus mastering and disable memory mapped space */
+	uint16_t command_register = pci_read_field(_device.pci_device, PCI_COMMAND, 2);
+	command_register |= (1 << 2); 
+	command_register &= ~(1 << 1);
+	pci_write_field(_device.pci_device, PCI_COMMAND, 2, command_register);
 	uint32_t mixer_port = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
 	/* Turn it up! */
 	outports(mixer_port + AC97_MASTER_VOLUME, 0);
 	outports(mixer_port + AC97_PCM_OUT_VOLUME, 0);
-
-	/* Give it our buffer descriptor list */
-	pci_write_field(_device.pci_device, AC97_POBDBAR, 4,
-			(uint32_t) map_to_physical((uintptr_t) &_device.bdl));
-	pci_write_field(_device.pci_device, AC97_POLVI, 1, N_ELEMENTS(_device.bdl));
 
 	return 0;
 }
