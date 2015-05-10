@@ -5,6 +5,7 @@
  */
 
 #include <logging.h>
+#include <mem.h>
 #include <module.h>
 #include <mod/shell.h>
 #include <printf.h>
@@ -33,7 +34,7 @@
 
 struct ac97_bdl_entry {
 	/* XXX(gerow): This relies on 32-bit addressing, probably bad */
-	uint8_t *pointer;
+	uint16_t *pointer;
 	uint32_t control_and_length;
 } __attribute__((packed));
 
@@ -86,7 +87,8 @@ static int init(void) {
 	outports(mixer_port + AC97_PCM_OUT_VOLUME, 0);
 
 	/* Give it our buffer descriptor list */
-	pci_write_field(_device.pci_device, AC97_POBDBAR, 4, (uint32_t) &_device.bdl);
+	pci_write_field(_device.pci_device, AC97_POBDBAR, 4,
+			(uint32_t) map_to_physical((uintptr_t) &_device.bdl));
 	pci_write_field(_device.pci_device, AC97_POLVI, 1, N_ELEMENTS(_device.bdl));
 
 	return 0;
