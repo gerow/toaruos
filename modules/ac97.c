@@ -23,13 +23,13 @@
 
 /* Bus mastering offsets */
 /* PCM out BAR */
-#define AC97_PO_BDBAR AC97_NABMBAR + 0x10
+#define AC97_PO_BDBAR 0x10
 /* PCM out last valid index */
-#define AC97_PO_LVI AC97_NABMBAR + 0x15
+#define AC97_PO_LVI 0x15
 /* PCM out control register */
-#define AC97_PO_CR AC97_NABMBAR + 0x1b
-#define AC97_PO_CIV AC97_NABMBAR + 0x14
-#define AC97_PO_PICB AC97_NABMBAR + 0x18
+#define AC97_PO_CR 0x1b
+#define AC97_PO_CIV 0x14
+#define AC97_PO_PICB 0x18
 
 /* Mixer settings */
 #define AC97_RESET             0x00
@@ -50,9 +50,10 @@ struct ac97_bdl_entry {
 
 struct ac97_device {
 	uint32_t pci_device;
+	uint16_t nabmbar;
 	int irq;
 	/* Buffer descriptor list */
-	struct ac97_bdl_entry bdl[32];
+	struct ac97_bdl_entry *bdl;
 };
 
 static struct ac97_device _device;
@@ -73,23 +74,30 @@ DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
 		fprintf(tty, "No AC'97 device found.\n");
 		return 1;
 	}
-	size_t irq = pci_read_field(_device.pci_device, PCI_INTERRUPT_LINE, 1);
 	fprintf(tty, "AC'97 audio device is at 0x%x.\n", _device.pci_device);
+	size_t irq = pci_read_field(_device.pci_device, PCI_INTERRUPT_LINE, 1);
 	fprintf(tty, "IRQ: %d\n", irq);
 	uint16_t command_register = pci_read_field(_device.pci_device, PCI_COMMAND, 2);
 	fprintf(tty, "COMMAND: 0x%04x\n", command_register);
-	fprintf(tty, "bdl[0].pointer: 0x%x\n", _device.bdl[0].pointer);
-	fprintf(tty, "bdl[0].control_and_length: 0x%x\n", _device.bdl[0].control_and_length);
-	uint8_t civ = pci_read_field(_device.pci_device, AC97_PO_CIV, 1);
-	fprintf(tty, "PO_CIV: %d\n", civ);
-	uint16_t picb = pci_read_field(_device.pci_device, AC97_PO_PICB, 1);
-	fprintf(tty, "PO_CIV: 0x%04x\n", picb);
+	fprintf(tty, "NABMBAR: 0x%04x\n", pci_read_field(_device.pci_device, AC97_NABMBAR, 2));
+	fprintf(tty, "PO_BDBAR: 0x%08x\n", inportl(_device.nabmbar + AC97_PO_BDBAR));
+	if (_device.bdl) {
+		fprintf(tty, "bdl[0].pointer: 0x%x\n", _device.bdl[0].pointer);
+		fprintf(tty, "bdl[0].control_and_length: 0x%x\n", _device.bdl[0].control_and_length);
+	}
+	fprintf(tty, "PO_CIV: %d\n", inportb(_device.nabmbar + AC97_PO_CIV));
+	fprintf(tty, "PO_PICB: 0x%04x\n", inportb(_device.nabmbar + AC97_PO_PICB));
+	fprintf(tty, "PO_CR: 0x%02x\n", inportb(_device.nabmbar + AC97_PO_CR));
+	fprintf(tty, "PO_LVI: 0x%02x\n", inportb(_device.nabmbar + AC97_PO_LVI));
 
 	return 0;
 }
 
 DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
 	/* Allocate a buffer and fill it with noise */
+	uint32_t bdl_p;
+	_device.bdl = (void *)kvmalloc_p(sizeof(*_device.bdl), &bdl_p);
+	fprintf(tty, "bdl_p: 0x%x\n", bdl_p);
 	uint16_t noise_length = 0xfffe;
 	uint16_t *buf = (uint16_t *)kvmalloc_p(noise_length * sizeof(*buf), &_device.bdl[0].pointer);
 	uint16_t val = 0xd179;
@@ -104,11 +112,10 @@ DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
 	AC97_CL_SET_LENGTH(_device.bdl[0].control_and_length, noise_length);
 
 	/* Give it our buffer descriptor list */
-	pci_write_field(_device.pci_device, AC97_PO_BDBAR, 4,
-			(uint32_t) map_to_physical((uintptr_t) &_device.bdl));
-	pci_write_field(_device.pci_device, AC97_PO_LVI, 1, 1);
+	outportl(_device.nabmbar + AC97_PO_BDBAR, bdl_p);
+	outportb(_device.nabmbar + AC97_PO_LVI, 0);
 	/* Set it to run! */
-	pci_write_field(_device.pci_device, AC97_PO_CR, 1, 1);
+	outportb(_device.nabmbar + AC97_PO_CR, 1);
 
 	return 0;
 }
@@ -120,11 +127,9 @@ static int init(void) {
 	if (!_device.pci_device) {
 		return 1;
 	}
+	_device.nabmbar = pci_read_field(_device.pci_device, AC97_NABMBAR, 2) & ((uint32_t) -1) << 1;
 	/* Enable bus mastering and disable memory mapped space */
-	uint16_t command_register = pci_read_field(_device.pci_device, PCI_COMMAND, 2);
-	command_register |= (1 << 2); 
-	command_register &= ~(1 << 1);
-	pci_write_field(_device.pci_device, PCI_COMMAND, 2, command_register);
+	pci_write_field(_device.pci_device, PCI_COMMAND, 2, 0x5);
 	uint32_t mixer_port = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
 	/* Turn it up! */
 	outports(mixer_port + AC97_MASTER_VOLUME, 0);
