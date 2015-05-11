@@ -16,16 +16,20 @@
 #define N_ELEMENTS(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /* BARs! */
-#define AC97_NAMBAR PCI_BAR0  /* Native Audio Mixer Base Address Register */
-#define AC97_NABMBAR PCI_BAR1  /* Native Audio Bus Mastering Base Address Register */
+/* Native Audio Mixer Base Address Register */
+#define AC97_NAMBAR 0x10
+/* Native Audio Bus Mastering Base Address Register */
+#define AC97_NABMBAR 0x14
 
 /* Bus mastering offsets */
 /* PCM out BAR */
-#define AC97_POBDBAR AC97_NABMBAR + 0x10
+#define AC97_PO_BDBAR AC97_NABMBAR + 0x10
 /* PCM out last valid index */
-#define AC97_POLVI AC97_NABMBAR + 0x15
+#define AC97_PO_LVI AC97_NABMBAR + 0x15
 /* PCM out control register */
 #define AC97_PO_CR AC97_NABMBAR + 0x1b
+#define AC97_PO_CIV AC97_NABMBAR + 0x14
+#define AC97_PO_PICB AC97_NABMBAR + 0x18
 
 /* Mixer settings */
 #define AC97_RESET             0x00
@@ -39,8 +43,8 @@ struct ac97_bdl_entry {
 	uint32_t control_and_length;
 } __attribute__((packed));
 
-#define AC97_CL_GET_LENGTH(cl) ((cl) & 0x00ff)
-#define AC97_CL_SET_LENGTH(cl, v) ((cl) = (v) & 0xff)
+#define AC97_CL_GET_LENGTH(cl) ((cl) & 0xffff)
+#define AC97_CL_SET_LENGTH(cl, v) ((cl) = (v) & 0xffff)
 #define AC97_CL_BUP 30
 #define AC97_CL_IOC 31
 
@@ -63,7 +67,7 @@ static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, voi
 
 }
 
-DEFINE_SHELL_FUNCTION(ac97_test, "[debug] Intel AC'97 experiments") {
+DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
 
 	if (!_device.pci_device) {
 		fprintf(tty, "No AC'97 device found.\n");
@@ -74,15 +78,22 @@ DEFINE_SHELL_FUNCTION(ac97_test, "[debug] Intel AC'97 experiments") {
 	fprintf(tty, "IRQ: %d\n", irq);
 	uint16_t command_register = pci_read_field(_device.pci_device, PCI_COMMAND, 2);
 	fprintf(tty, "COMMAND: 0x%04x\n", command_register);
+	fprintf(tty, "bdl[0].pointer: 0x%x\n", _device.bdl[0].pointer);
+	fprintf(tty, "bdl[0].control_and_length: 0x%x\n", _device.bdl[0].control_and_length);
+	uint8_t civ = pci_read_field(_device.pci_device, AC97_PO_CIV, 1);
+	fprintf(tty, "PO_CIV: %d\n", civ);
+	uint16_t picb = pci_read_field(_device.pci_device, AC97_PO_PICB, 1);
+	fprintf(tty, "PO_CIV: 0x%04x\n", picb);
 
 	return 0;
 }
 
 DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
 	/* Allocate a buffer and fill it with noise */
-	uint16_t *buf = (uint16_t *)kvmalloc_p(1 << 15, &_device.bdl[0].pointer);
-	uint16_t val = 0xf179;
-	for (int i = 0; i < 1 << 15; i++) {
+	uint16_t noise_length = 0xfffe;
+	uint16_t *buf = (uint16_t *)kvmalloc_p(noise_length * sizeof(*buf), &_device.bdl[0].pointer);
+	uint16_t val = 0xd179;
+	for (int i = 0; i < noise_length; i++) {
 		buf[i] = val;
 		if (val & 0x8000) {
 			val = (val << 1) | 1;
@@ -90,20 +101,20 @@ DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
 			val = val << 1;
 		}
 	}
-	AC97_CL_SET_LENGTH(_device.bdl[0].control_and_length, 1 << 15);
+	AC97_CL_SET_LENGTH(_device.bdl[0].control_and_length, noise_length);
 
 	/* Give it our buffer descriptor list */
-	pci_write_field(_device.pci_device, AC97_POBDBAR, 4,
+	pci_write_field(_device.pci_device, AC97_PO_BDBAR, 4,
 			(uint32_t) map_to_physical((uintptr_t) &_device.bdl));
-	pci_write_field(_device.pci_device, AC97_POLVI, 1, 1);
+	pci_write_field(_device.pci_device, AC97_PO_LVI, 1, 1);
 	/* Set it to run! */
-	outportb(AC97_PO_CR, 1);
+	pci_write_field(_device.pci_device, AC97_PO_CR, 1, 1);
 
 	return 0;
 }
 
 static int init(void) {
-	BIND_SHELL_FUNCTION(ac97_test);
+	BIND_SHELL_FUNCTION(ac97_status);
 	BIND_SHELL_FUNCTION(ac97_noise);
 	pci_scan(&find_ac97, -1, &_device);
 	if (!_device.pci_device) {
