@@ -18,6 +18,7 @@ CFLAGS += -finline-functions -ffreestanding
 CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-format
 CFLAGS += -pedantic -fno-omit-frame-pointer
 CFLAGS += -D_KERNEL_
+CFLAGS += -DEARLY_BOOT_LOG
 
 # Kernel autoversioning with git sha
 CFLAGS += -DKERNEL_GIT_TAG=`util/make-version`

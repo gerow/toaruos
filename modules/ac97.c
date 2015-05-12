@@ -27,9 +27,21 @@
 /* PCM out last valid index */
 #define AC97_PO_LVI 0x15
 /* PCM out control register */
+#define AC97_X_CR_RPBM (1 << 0)
+#define AC97_X_CR_RR (1 << 1)
+#define AC97_X_CR_LVBIE (1 << 2)
+#define AC97_X_CR_FEIE (1 << 3)
+#define AC97_X_CR_IOCE (1 << 4)
 #define AC97_PO_CR 0x1b
 #define AC97_PO_CIV 0x14
 #define AC97_PO_PICB 0x18
+/* PCM out status register */
+#define AC97_PO_SR 0x16
+#define AC97_X_SR_DCH (1 << 0)
+#define AC97_X_SR_CELV (1 << 1)
+#define AC97_X_SR_LVBCI (1 << 2)
+#define AC97_X_SR_BCIS (1 << 3)
+#define AC97_X_SR_FIFOE (1 << 3)
 
 /* Mixer settings */
 #define AC97_RESET             0x00
@@ -45,13 +57,14 @@ struct ac97_bdl_entry {
 
 #define AC97_CL_GET_LENGTH(cl) ((cl) & 0xffff)
 #define AC97_CL_SET_LENGTH(cl, v) ((cl) = (v) & 0xffff)
-#define AC97_CL_BUP 30
-#define AC97_CL_IOC 31
+#define AC97_CL_BUP (1 << 30)
+#define AC97_CL_IOC (1 << 31)
 
 struct ac97_device {
 	uint32_t pci_device;
 	uint16_t nabmbar;
-	int irq;
+	uint16_t nambar;
+	size_t irq;
 	/* Buffer descriptor list */
 	struct ac97_bdl_entry *bdl;
 };
@@ -131,17 +144,41 @@ DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
 		((uint8_t *)buf)[i] = sample_440[i % N_ELEMENTS(sample_440)];
 	}
 	AC97_CL_SET_LENGTH(_device.bdl[0].control_and_length, noise_length);
+	_device.bdl[0].control_and_length |= AC97_CL_IOC;
 
 	/* Give it our buffer descriptor list */
 	outportl(_device.nabmbar + AC97_PO_BDBAR, bdl_p);
 	outportb(_device.nabmbar + AC97_PO_LVI, 0);
 	/* Set it to run! */
-	outportb(_device.nabmbar + AC97_PO_CR, 1);
+	outportb(_device.nabmbar + AC97_PO_CR,
+		 inportb(_device.nabmbar + AC97_PO_CR) | AC97_X_CR_RPBM);
 
 	return 0;
 }
 
+static void irq_handler(struct regs *regs) {
+	debug_print(NOTICE, "AC97 IRQ called");
+	uint16_t sr = inports(_device.nabmbar + AC97_PO_SR);
+	debug_print(NOTICE, "sr: 0x%04x", sr);
+	if (sr & AC97_X_SR_LVBCI) {
+		/* Stop playing */
+		outportb(_device.nabmbar + AC97_PO_CR,
+			 inportb(_device.nabmbar + AC97_PO_CR) & ~AC97_X_CR_RPBM);
+		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_LVBCI);
+		debug_print(NOTICE, "Last valid buffer completion interrupt handled");
+	} else if (sr & AC97_X_SR_BCIS) {
+		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_BCIS);
+		debug_print(NOTICE, "Buffer completion interrupt status handled");
+	} else if (sr & AC97_X_SR_FIFOE) {
+		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_FIFOE);
+		debug_print(NOTICE, "FIFO error handled");
+	}
+
+	irq_ack(_device.irq);
+}
+
 static int init(void) {
+	debug_print(NOTICE, "Initializing AC97");
 	BIND_SHELL_FUNCTION(ac97_status);
 	BIND_SHELL_FUNCTION(ac97_noise);
 	pci_scan(&find_ac97, -1, &_device);
@@ -149,12 +186,23 @@ static int init(void) {
 		return 1;
 	}
 	_device.nabmbar = pci_read_field(_device.pci_device, AC97_NABMBAR, 2) & ((uint32_t) -1) << 1;
+	_device.nambar = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
+	_device.irq = pci_read_field(_device.pci_device, PCI_INTERRUPT_LINE, 1);
+	if (!irq_is_handler_free(_device.irq)) {
+		debug_print(ERROR, "AC97 IRQ conflict: IRQ %d already in use", _device.irq);
+		return 1;
+	}
+	irq_install_handler(_device.irq, irq_handler);
+	/* Enable all matter of interrupts */
+	outportb(_device.nabmbar + AC97_PO_CR, AC97_X_CR_LVBIE | AC97_X_CR_FEIE | AC97_X_CR_IOCE);
+
 	/* Enable bus mastering and disable memory mapped space */
 	pci_write_field(_device.pci_device, PCI_COMMAND, 2, 0x5);
-	uint32_t mixer_port = pci_read_field(_device.pci_device, PCI_BAR0, 4) & ((uint32_t) -1) << 1;
 	/* Turn it up! */
-	outports(mixer_port + AC97_MASTER_VOLUME, 0);
-	outports(mixer_port + AC97_PCM_OUT_VOLUME, 0);
+	outports(_device.nambar + AC97_MASTER_VOLUME, 0);
+	outports(_device.nambar + AC97_PCM_OUT_VOLUME, 0);
+
+	debug_print(NOTICE, "AC97 initialized successfully");
 
 	return 0;
 }
