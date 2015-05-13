@@ -1,4 +1,5 @@
-/*
+/* vim: tabstop=4 shiftwidth=4 noexpandtab
+ * 
  * Driver for the Intel AC'97.
  *
  * See <http://www.intel.com/design/chipsets/manuals/29802801.pdf>.
@@ -58,26 +59,26 @@
 #define AC97_PCM_OUT_VOLUME 0x18
 
 /* An entry in a buffer dscriptor list */
-struct ac97_bdl_entry {
+typedef struct {
 	uint32_t pointer;  /* Pointer to buffer */
-	uint32_t cl;  /* Control values and buffer length */
-} __attribute__((packed));
+	uint32_t cl;       /* Control values and buffer length */
+} __attribute__((packed)) ac97_bdl_entry_t;
 
-struct ac97_device {
+typedef struct {
 	uint32_t pci_device;
-	uint16_t nabmbar;  /* Native audio bus mastring BAR */
-	uint16_t nambar;  /* Native audio mixing BAR */
-	size_t irq;  /* This ac97's irq */
-	uint8_t lvi;  /* The currently set last valid index */
-	struct ac97_bdl_entry *bdl;  /* Buffer descriptor list */
+	uint16_t nabmbar;              /* Native audio bus mastring BAR */
+	uint16_t nambar;               /* Native audio mixing BAR */
+	size_t irq;                    /* This ac97's irq */
+	uint8_t lvi;                   /* The currently set last valid index */
+	ac97_bdl_entry_t *bdl;         /* Buffer descriptor list */
 	uint16_t *bufs[AC97_BDL_LEN];  /* Virtual addresses for buffers in BDL */
-};
+} ac97_device_t;
 
-static struct ac97_device _device;
+static ac97_device_t _device;
 
 static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
 
-	struct ac97_device * ac97 = extra;
+	ac97_device_t * ac97 = extra;
 
 	if ((vendorid == 0x8086) && (deviceid == 0x2415)) {
 		ac97->pci_device = device;
@@ -153,8 +154,7 @@ DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] AC'97 noise test (it's loud and annoy
 	_device.lvi = AC97_BDL_LEN - 1;
 	outportb(_device.nabmbar + AC97_PO_LVI, _device.lvi);
 	/* Set it to run! */
-	outportb(_device.nabmbar + AC97_PO_CR,
-		 inportb(_device.nabmbar + AC97_PO_CR) | AC97_X_CR_RPBM);
+	outportb(_device.nabmbar + AC97_PO_CR, inportb(_device.nabmbar + AC97_PO_CR) | AC97_X_CR_RPBM);
 
 	return 0;
 }
@@ -166,7 +166,7 @@ static void irq_handler(struct regs *regs) {
 	if (sr & AC97_X_SR_LVBCI) {
 		/* Stop playing */
 		outportb(_device.nabmbar + AC97_PO_CR,
-			 inportb(_device.nabmbar + AC97_PO_CR) & ~AC97_X_CR_RPBM);
+				 inportb(_device.nabmbar + AC97_PO_CR) & ~AC97_X_CR_RPBM);
 		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_LVBCI);
 		debug_print(NOTICE, "Last valid buffer completion interrupt handled");
 	} else if (sr & AC97_X_SR_BCIS) {
@@ -217,9 +217,8 @@ static int init(void) {
 	_device.bdl = (void *)kmalloc_p(AC97_BDL_LEN * sizeof(*_device.bdl), &bdl_p);
 	memset(_device.bdl, 0, AC97_BDL_LEN * sizeof(*_device.bdl));
 	for (int i = 0; i < AC97_BDL_LEN; i++) {
-		_device.bufs[i] = (uint16_t *)kmalloc_p(
-				AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]),
-				&_device.bdl[i].pointer);
+		_device.bufs[i] = (uint16_t *)kmalloc_p(AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]),
+												&_device.bdl[i].pointer);
 		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
 		AC97_CL_SET_LENGTH(_device.bdl[i].cl, AC97_BDL_BUFFER_LEN);
 	}
