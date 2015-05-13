@@ -212,10 +212,10 @@ static int init(void) {
 
 	/* Allocate our BDL and our buffers */
 	uint32_t bdl_p;
-	_device.bdl = (void *)kvmalloc_p(AC97_BDL_LEN * sizeof(*_device.bdl), &bdl_p);
+	_device.bdl = (void *)kmalloc_p(AC97_BDL_LEN * sizeof(*_device.bdl), &bdl_p);
 	memset(_device.bdl, 0, AC97_BDL_LEN * sizeof(*_device.bdl));
 	for (int i = 0; i < AC97_BDL_LEN; i++) {
-		_device.bufs[i] = (uint16_t *)kvmalloc_p(
+		_device.bufs[i] = (uint16_t *)kmalloc_p(
 				AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]),
 				&_device.bdl[i].pointer);
 		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
