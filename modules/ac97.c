@@ -1,5 +1,5 @@
 /* vim: tabstop=4 shiftwidth=4 noexpandtab
- * 
+ *
  * Driver for the Intel AC'97.
  *
  * See <http://www.intel.com/design/chipsets/manuals/29802801.pdf>.

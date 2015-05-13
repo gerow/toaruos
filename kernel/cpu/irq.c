@@ -45,10 +45,10 @@ void irq_uninstall_handler(size_t irq) {
 /*
  * Check to see if an interrupt handler is occupied.
  *
- * TODO(gerow): The proper solution here would probably be to have shared IRQs.
+ * The proper solution here would probably be to have shared IRQs.
  */
 int irq_is_handler_free(size_t irq) {
-	return irq_routines[irq] == NULL;
+	return !irq_routines[irq];
 }
 
 /*
