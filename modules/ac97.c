@@ -205,8 +205,9 @@ static int init(void) {
 	/* Enable bus mastering and disable memory mapped space */
 	pci_write_field(_device.pci_device, PCI_COMMAND, 2, 0x5);
 	/* Turn it up! */
-	outports(_device.nambar + AC97_MASTER_VOLUME, 0);
-	outports(_device.nambar + AC97_PCM_OUT_VOLUME, 0);
+	uint16_t volume = 0x4f | (0x4f << 8);
+	outports(_device.nambar + AC97_MASTER_VOLUME, volume);
+	outports(_device.nambar + AC97_PCM_OUT_VOLUME, volume);
 
 	/* Allocate our BDL and our buffers */
 	uint32_t bdl_p;
