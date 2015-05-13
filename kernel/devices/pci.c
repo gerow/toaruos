@@ -110,3 +110,4 @@ void pci_scan(pci_func_t f, int type, void * extra) {
 		}
 	}
 }
+
