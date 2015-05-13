@@ -16,44 +16,46 @@
 #define N_ELEMENTS(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /* BARs! */
-#define AC97_NAMBAR 0x10  /* Native Audio Mixer Base Address Register */
+#define AC97_NAMBAR  0x10  /* Native Audio Mixer Base Address Register */
 #define AC97_NABMBAR 0x14  /* Native Audio Bus Mastering Base Address Register */
 
 /* Bus mastering IO port offsets */
 #define AC97_PO_BDBAR 0x10  /* PCM out buffer descriptor BAR */
-#define AC97_PO_LVI 0x15  /* PCM out last valid index */
-#define AC97_PO_CR 0x1B  /* PCM out control register */
-#define AC97_PO_CIV 0x14  /* PCM out current index value */
-#define AC97_PO_PICB 0x18  /* Position in current buffer register */
+#define AC97_PO_CIV   0x14  /* PCM out current index value */
+#define AC97_PO_LVI   0x15  /* PCM out last valid index */
+#define AC97_PO_SR    0x16  /* PCM out status register */
+#define AC97_PO_PICB  0x18  /* PCM out position in current buffer register */
+#define AC97_PO_CR    0x1B  /* PCM out control register */
 
 /* Bus mastering misc */
 /* Buffer descriptor list constants */
-#define AC97_BDL_LEN 32  /* Buffer descriptor list length */
-#define AC97_BDL_BUFFER_LEN 0x8000  /* Length of buffer in BDL */
-#define AC97_CL_GET_LENGTH(cl) ((cl) & 0xFFFF)  /* Decode length from cl */
+#define AC97_BDL_LEN              32                    /* Buffer descriptor list length */
+#define AC97_BDL_BUFFER_LEN       0x8000                /* Length of buffer in BDL */
+#define AC97_CL_GET_LENGTH(cl)    ((cl) & 0xFFFF)       /* Decode length from cl */
 #define AC97_CL_SET_LENGTH(cl, v) ((cl) = (v) & 0xFFFF) /* Encode length to cl */
-#define AC97_CL_BUP (1 << 30)
-#define AC97_CL_IOC (1 << 31)
+#define AC97_CL_BUP               (1 << 30)             /* Buffer underrun policy in cl */
+#define AC97_CL_IOC               (1 << 31)             /* Interrupt on completion flag in cl */
+
 /* PCM out control register flags */
-#define AC97_X_CR_RPBM (1 << 0)  /* Run/pause bus master */
-#define AC97_X_CR_RR (1 << 1)  /* Reset registers */
+#define AC97_X_CR_RPBM  (1 << 0)  /* Run/pause bus master */
+#define AC97_X_CR_RR    (1 << 1)  /* Reset registers */
 #define AC97_X_CR_LVBIE (1 << 2)  /* Last valid buffer interrupt enable */
-#define AC97_X_CR_FEIE (1 << 3)  /* FIFO error interrupt enable */
-#define AC97_X_CR_IOCE (1 << 4)  /* Interrupt on completion enable */
-/* PCM out status register */
-#define AC97_PO_SR 0x16
-#define AC97_X_SR_DCH (1 << 0)
-#define AC97_X_SR_CELV (1 << 1)
-#define AC97_X_SR_LVBCI (1 << 2)
-#define AC97_X_SR_BCIS (1 << 3)
-#define AC97_X_SR_FIFOE (1 << 3)
+#define AC97_X_CR_FEIE  (1 << 3)  /* FIFO error interrupt enable */
+#define AC97_X_CR_IOCE  (1 << 4)  /* Interrupt on completion enable */
+
+/* Status register flags */
+#define AC97_X_SR_DCH   (1 << 0)  /* DMA controller halted */
+#define AC97_X_SR_CELV  (1 << 1)  /* Current equals last valid */
+#define AC97_X_SR_LVBCI (1 << 2)  /* Last valid buffer completion interrupt */
+#define AC97_X_SR_BCIS  (1 << 3)  /* Buffer completion interrupt status */
+#define AC97_X_SR_FIFOE (1 << 3)  /* FIFO error */
 
 /* Mixer IO port offsets */
-#define AC97_RESET             0x00
-#define AC97_MASTER_VOLUME     0x02
-#define AC97_AUX_OUT_VOLUME    0x04
-#define AC97_MONO_VOLUME       0x06
-#define AC97_PCM_OUT_VOLUME    0x18
+#define AC97_RESET          0x00
+#define AC97_MASTER_VOLUME  0x02
+#define AC97_AUX_OUT_VOLUME 0x04
+#define AC97_MONO_VOLUME    0x06
+#define AC97_PCM_OUT_VOLUME 0x18
 
 /* An entry in a buffer dscriptor list */
 struct ac97_bdl_entry {
