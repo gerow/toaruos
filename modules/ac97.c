@@ -16,27 +16,30 @@
 #define N_ELEMENTS(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /* BARs! */
-/* Native Audio Mixer Base Address Register */
-#define AC97_NAMBAR 0x10
-/* Native Audio Bus Mastering Base Address Register */
-#define AC97_NABMBAR 0x14
+#define AC97_NAMBAR 0x10  /* Native Audio Mixer Base Address Register */
+#define AC97_NABMBAR 0x14  /* Native Audio Bus Mastering Base Address Register */
 
-/* Bus mastering offsets */
-/* PCM out BAR */
-#define AC97_PO_BDBAR 0x10
-#define AC97_BDL_LEN 32
-#define AC97_BDL_BUFFER_LEN 0x8000
-/* PCM out last valid index */
-#define AC97_PO_LVI 0x15
-/* PCM out control register */
-#define AC97_X_CR_RPBM (1 << 0)
-#define AC97_X_CR_RR (1 << 1)
-#define AC97_X_CR_LVBIE (1 << 2)
-#define AC97_X_CR_FEIE (1 << 3)
-#define AC97_X_CR_IOCE (1 << 4)
-#define AC97_PO_CR 0x1b
-#define AC97_PO_CIV 0x14
-#define AC97_PO_PICB 0x18
+/* Bus mastering IO port offsets */
+#define AC97_PO_BDBAR 0x10  /* PCM out buffer descriptor BAR */
+#define AC97_PO_LVI 0x15  /* PCM out last valid index */
+#define AC97_PO_CR 0x1B  /* PCM out control register */
+#define AC97_PO_CIV 0x14  /* PCM out current index value */
+#define AC97_PO_PICB 0x18  /* Position in current buffer register */
+
+/* Bus mastering misc */
+/* Buffer descriptor list constants */
+#define AC97_BDL_LEN 32  /* Buffer descriptor list length */
+#define AC97_BDL_BUFFER_LEN 0x8000  /* Length of buffer in BDL */
+#define AC97_CL_GET_LENGTH(cl) ((cl) & 0xFFFF)  /* Decode length from cl */
+#define AC97_CL_SET_LENGTH(cl, v) ((cl) = (v) & 0xFFFF) /* Encode length to cl */
+#define AC97_CL_BUP (1 << 30)
+#define AC97_CL_IOC (1 << 31)
+/* PCM out control register flags */
+#define AC97_X_CR_RPBM (1 << 0)  /* Run/pause bus master */
+#define AC97_X_CR_RR (1 << 1)  /* Reset registers */
+#define AC97_X_CR_LVBIE (1 << 2)  /* Last valid buffer interrupt enable */
+#define AC97_X_CR_FEIE (1 << 3)  /* FIFO error interrupt enable */
+#define AC97_X_CR_IOCE (1 << 4)  /* Interrupt on completion enable */
 /* PCM out status register */
 #define AC97_PO_SR 0x16
 #define AC97_X_SR_DCH (1 << 0)
@@ -45,32 +48,27 @@
 #define AC97_X_SR_BCIS (1 << 3)
 #define AC97_X_SR_FIFOE (1 << 3)
 
-/* Mixer settings */
+/* Mixer IO port offsets */
 #define AC97_RESET             0x00
 #define AC97_MASTER_VOLUME     0x02
 #define AC97_AUX_OUT_VOLUME    0x04
 #define AC97_MONO_VOLUME       0x06
 #define AC97_PCM_OUT_VOLUME    0x18
 
+/* An entry in a buffer dscriptor list */
 struct ac97_bdl_entry {
-	uint32_t pointer;
-	uint32_t control_and_length;
+	uint32_t pointer;  /* Pointer to buffer */
+	uint32_t cl;  /* Control values and buffer length */
 } __attribute__((packed));
-
-#define AC97_CL_GET_LENGTH(cl) ((cl) & 0xffff)
-#define AC97_CL_SET_LENGTH(cl, v) ((cl) = (v) & 0xffff)
-#define AC97_CL_BUP (1 << 30)
-#define AC97_CL_IOC (1 << 31)
 
 struct ac97_device {
 	uint32_t pci_device;
-	uint16_t nabmbar;
-	uint16_t nambar;
-	size_t irq;
-	uint8_t lvi;
-	/* Buffer descriptor list */
-	struct ac97_bdl_entry *bdl;
-	uint16_t *bufs[AC97_BDL_LEN];
+	uint16_t nabmbar;  /* Native audio bus mastring BAR */
+	uint16_t nambar;  /* Native audio mixing BAR */
+	size_t irq;  /* This ac97's irq */
+	uint8_t lvi;  /* The currently set last valid index */
+	struct ac97_bdl_entry *bdl;  /* Buffer descriptor list */
+	uint16_t *bufs[AC97_BDL_LEN];  /* Virtual addresses for buffers in BDL */
 };
 
 static struct ac97_device _device;
@@ -85,7 +83,7 @@ static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, voi
 
 }
 
-DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
+DEFINE_SHELL_FUNCTION(ac97_status, "[debug] AC'97 status values") {
 	if (!_device.pci_device) {
 		fprintf(tty, "No AC'97 device found.\n");
 		return 1;
@@ -100,8 +98,7 @@ DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
 	if (_device.bdl) {
 		for (int i = 0; i < AC97_BDL_LEN; i++) {
 			fprintf(tty, "bdl[%d].pointer: 0x%x\n", i, _device.bdl[i].pointer);
-			fprintf(tty, "bdl[%d].control_and_length: 0x%x\n", i,
-				_device.bdl[i].control_and_length);
+			fprintf(tty, "bdl[%d].cl: 0x%x\n", i, _device.bdl[i].cl);
 		}
 	}
 	fprintf(tty, "PO_CIV: %d\n", inportb(_device.nabmbar + AC97_PO_CIV));
@@ -112,6 +109,12 @@ DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
 	return 0;
 }
 
+/*
+ * A stereo sample of a 440hz sine wave biased 50% to the right. It is sampled
+ * at 48KHz with 16-bit samples and interleaved. Technically you'll get some
+ * distortion copying this sample multiple times since the ends don't really
+ * line up, but it's good enough for testing purposes.
+ */
 unsigned char sample_440[] = {
   0x0f, 0x00, 0x1f, 0x00, 0xe0, 0x02, 0xc0, 0x05, 0xfb, 0x05, 0xf2, 0x0b,
   0xb7, 0x08, 0x74, 0x11, 0xc3, 0x0b, 0x81, 0x17, 0x7d, 0x0e, 0x00, 0x1d,
@@ -137,14 +140,12 @@ unsigned char sample_440[] = {
   0x0e, 0xe8, 0x16, 0xd0
 };
 
-unsigned int __440_256_raw_len = 256;
-DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
+DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] AC'97 noise test (it's loud and annoying)") {
 	for (size_t i = 0; i < AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]); i++) {
 		((uint8_t *)_device.bufs[0])[i] = sample_440[i % N_ELEMENTS(sample_440)];
 	}
 	for (size_t i = 1; i < AC97_BDL_LEN; i++) {
-		memcpy(_device.bufs[i],
-		       _device.bufs[0],
+		memcpy(_device.bufs[i], _device.bufs[0],
 		       AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
 	}
 	_device.lvi = AC97_BDL_LEN - 1;
@@ -204,8 +205,8 @@ static int init(void) {
 
 	/* Enable bus mastering and disable memory mapped space */
 	pci_write_field(_device.pci_device, PCI_COMMAND, 2, 0x5);
-	/* Turn it up! */
-	uint16_t volume = 0x4f | (0x4f << 8);
+	/* Put ourselves at a reasonable volume. */
+	uint16_t volume = 0x4F | (0x4F << 8);
 	outports(_device.nambar + AC97_MASTER_VOLUME, volume);
 	outports(_device.nambar + AC97_PCM_OUT_VOLUME, volume);
 
@@ -218,11 +219,11 @@ static int init(void) {
 				AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]),
 				&_device.bdl[i].pointer);
 		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
-		AC97_CL_SET_LENGTH(_device.bdl[i].control_and_length, AC97_BDL_BUFFER_LEN);
+		AC97_CL_SET_LENGTH(_device.bdl[i].cl, AC97_BDL_BUFFER_LEN);
 	}
 	/* Set the midway buffer and the last buffer to interrupt */
-	_device.bdl[AC97_BDL_LEN / 2].control_and_length |= AC97_CL_IOC;
-	_device.bdl[AC97_BDL_LEN - 1].control_and_length |= AC97_CL_IOC;
+	_device.bdl[AC97_BDL_LEN / 2].cl |= AC97_CL_IOC;
+	_device.bdl[AC97_BDL_LEN - 1].cl |= AC97_CL_IOC;
 	/* Tell the ac97 where our BDL is */
 	outportl(_device.nabmbar + AC97_PO_BDBAR, bdl_p);
 
@@ -233,6 +234,9 @@ static int init(void) {
 
 static int fini(void) {
 	free(_device.bdl);
+	for (int i = 0; i < AC97_BDL_LEN; i++) {
+		free(_device.bufs[i]);
+	}
 	return 0;
 }
 
