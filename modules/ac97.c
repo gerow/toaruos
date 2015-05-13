@@ -24,6 +24,8 @@
 /* Bus mastering offsets */
 /* PCM out BAR */
 #define AC97_PO_BDBAR 0x10
+#define AC97_BDL_LEN 32
+#define AC97_BDL_BUFFER_LEN 0x8000
 /* PCM out last valid index */
 #define AC97_PO_LVI 0x15
 /* PCM out control register */
@@ -65,8 +67,10 @@ struct ac97_device {
 	uint16_t nabmbar;
 	uint16_t nambar;
 	size_t irq;
+	uint8_t lvi;
 	/* Buffer descriptor list */
 	struct ac97_bdl_entry *bdl;
+	uint16_t *bufs[AC97_BDL_LEN];
 };
 
 static struct ac97_device _device;
@@ -82,7 +86,6 @@ static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, voi
 }
 
 DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
-
 	if (!_device.pci_device) {
 		fprintf(tty, "No AC'97 device found.\n");
 		return 1;
@@ -95,8 +98,11 @@ DEFINE_SHELL_FUNCTION(ac97_status, "[debug] Intel AC'97 experiments") {
 	fprintf(tty, "NABMBAR: 0x%04x\n", pci_read_field(_device.pci_device, AC97_NABMBAR, 2));
 	fprintf(tty, "PO_BDBAR: 0x%08x\n", inportl(_device.nabmbar + AC97_PO_BDBAR));
 	if (_device.bdl) {
-		fprintf(tty, "bdl[0].pointer: 0x%x\n", _device.bdl[0].pointer);
-		fprintf(tty, "bdl[0].control_and_length: 0x%x\n", _device.bdl[0].control_and_length);
+		for (int i = 0; i < AC97_BDL_LEN; i++) {
+			fprintf(tty, "bdl[%d].pointer: 0x%x\n", i, _device.bdl[i].pointer);
+			fprintf(tty, "bdl[%d].control_and_length: 0x%x\n", i,
+				_device.bdl[i].control_and_length);
+		}
 	}
 	fprintf(tty, "PO_CIV: %d\n", inportb(_device.nabmbar + AC97_PO_CIV));
 	fprintf(tty, "PO_PICB: 0x%04x\n", inportb(_device.nabmbar + AC97_PO_PICB));
@@ -133,22 +139,16 @@ unsigned char sample_440[] = {
 
 unsigned int __440_256_raw_len = 256;
 DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] Intel AC'97 noise test") {
-	/* Allocate a buffer and fill it with noise */
-	uint32_t bdl_p;
-	_device.bdl = (void *)kvmalloc_p(sizeof(*_device.bdl), &bdl_p);
-	fprintf(tty, "bdl_p: 0x%x\n", bdl_p);
-	uint16_t noise_length = 0xfffe;
-	uint16_t *buf = (uint16_t *)kvmalloc_p(noise_length * sizeof(*buf), &_device.bdl[0].pointer);
-	size_t bytes_to_copy = sizeof(*buf) * 0xfffe;
-	for (size_t i = 0; i < bytes_to_copy; i++) {
-		((uint8_t *)buf)[i] = sample_440[i % N_ELEMENTS(sample_440)];
+	for (size_t i = 0; i < AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]); i++) {
+		((uint8_t *)_device.bufs[0])[i] = sample_440[i % N_ELEMENTS(sample_440)];
 	}
-	AC97_CL_SET_LENGTH(_device.bdl[0].control_and_length, noise_length);
-	_device.bdl[0].control_and_length |= AC97_CL_IOC;
-
-	/* Give it our buffer descriptor list */
-	outportl(_device.nabmbar + AC97_PO_BDBAR, bdl_p);
-	outportb(_device.nabmbar + AC97_PO_LVI, 0);
+	for (size_t i = 1; i < AC97_BDL_LEN; i++) {
+		memcpy(_device.bufs[i],
+		       _device.bufs[0],
+		       AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
+	}
+	_device.lvi = AC97_BDL_LEN - 1;
+	outportb(_device.nabmbar + AC97_PO_LVI, _device.lvi);
 	/* Set it to run! */
 	outportb(_device.nabmbar + AC97_PO_CR,
 		 inportb(_device.nabmbar + AC97_PO_CR) | AC97_X_CR_RPBM);
@@ -167,6 +167,12 @@ static void irq_handler(struct regs *regs) {
 		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_LVBCI);
 		debug_print(NOTICE, "Last valid buffer completion interrupt handled");
 	} else if (sr & AC97_X_SR_BCIS) {
+		if (_device.lvi == AC97_BDL_LEN - 1) {
+			_device.lvi = AC97_BDL_LEN / 2;
+		} else {
+			_device.lvi = AC97_BDL_LEN - 1;
+		}
+		outportb(_device.nabmbar + AC97_PO_LVI, _device.lvi);
 		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_BCIS);
 		debug_print(NOTICE, "Buffer completion interrupt status handled");
 	} else if (sr & AC97_X_SR_FIFOE) {
@@ -194,13 +200,30 @@ static int init(void) {
 	}
 	irq_install_handler(_device.irq, irq_handler);
 	/* Enable all matter of interrupts */
-	outportb(_device.nabmbar + AC97_PO_CR, AC97_X_CR_LVBIE | AC97_X_CR_FEIE | AC97_X_CR_IOCE);
+	outportb(_device.nabmbar + AC97_PO_CR, AC97_X_CR_FEIE | AC97_X_CR_IOCE);
 
 	/* Enable bus mastering and disable memory mapped space */
 	pci_write_field(_device.pci_device, PCI_COMMAND, 2, 0x5);
 	/* Turn it up! */
 	outports(_device.nambar + AC97_MASTER_VOLUME, 0);
 	outports(_device.nambar + AC97_PCM_OUT_VOLUME, 0);
+
+	/* Allocate our BDL and our buffers */
+	uint32_t bdl_p;
+	_device.bdl = (void *)kvmalloc_p(AC97_BDL_LEN * sizeof(*_device.bdl), &bdl_p);
+	memset(_device.bdl, 0, AC97_BDL_LEN * sizeof(*_device.bdl));
+	for (int i = 0; i < AC97_BDL_LEN; i++) {
+		_device.bufs[i] = (uint16_t *)kvmalloc_p(
+				AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]),
+				&_device.bdl[i].pointer);
+		memset(_device.bufs[i], 0, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]));
+		AC97_CL_SET_LENGTH(_device.bdl[i].control_and_length, AC97_BDL_BUFFER_LEN);
+	}
+	/* Set the midway buffer and the last buffer to interrupt */
+	_device.bdl[AC97_BDL_LEN / 2].control_and_length |= AC97_CL_IOC;
+	_device.bdl[AC97_BDL_LEN - 1].control_and_length |= AC97_CL_IOC;
+	/* Tell the ac97 where our BDL is */
+	outportl(_device.nabmbar + AC97_PO_BDBAR, bdl_p);
 
 	debug_print(NOTICE, "AC97 initialized successfully");
 
