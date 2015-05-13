@@ -13,7 +13,7 @@
 #include <pci.h>
 #include <system.h>
 
-/* utility functions */
+/* Utility macros */
 #define N_ELEMENTS(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 /* BARs! */
@@ -66,12 +66,12 @@ typedef struct {
 
 typedef struct {
 	uint32_t pci_device;
-	uint16_t nabmbar;              /* Native audio bus mastring BAR */
-	uint16_t nambar;               /* Native audio mixing BAR */
-	size_t irq;                    /* This ac97's irq */
-	uint8_t lvi;                   /* The currently set last valid index */
-	ac97_bdl_entry_t *bdl;         /* Buffer descriptor list */
-	uint16_t *bufs[AC97_BDL_LEN];  /* Virtual addresses for buffers in BDL */
+	uint16_t nabmbar;               /* Native audio bus mastring BAR */
+	uint16_t nambar;                /* Native audio mixing BAR */
+	size_t irq;                     /* This ac97's irq */
+	uint8_t lvi;                    /* The currently set last valid index */
+	ac97_bdl_entry_t * bdl;         /* Buffer descriptor list */
+	uint16_t * bufs[AC97_BDL_LEN];  /* Virtual addresses for buffers in BDL */
 } ac97_device_t;
 
 static ac97_device_t _device;
@@ -159,7 +159,7 @@ DEFINE_SHELL_FUNCTION(ac97_noise, "[debug] AC'97 noise test (it's loud and annoy
 	return 0;
 }
 
-static void irq_handler(struct regs *regs) {
+static void irq_handler(struct regs * regs) {
 	debug_print(NOTICE, "AC97 IRQ called");
 	uint16_t sr = inports(_device.nabmbar + AC97_PO_SR);
 	debug_print(NOTICE, "sr: 0x%04x", sr);
