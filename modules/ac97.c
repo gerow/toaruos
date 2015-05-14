@@ -13,6 +13,7 @@
 #include <mem.h>
 #include <module.h>
 #include <mod/shell.h>
+#include <mod/snd.h>
 #include <printf.h>
 #include <pci.h>
 #include <system.h>
@@ -62,6 +63,11 @@
 #define AC97_MONO_VOLUME    0x06
 #define AC97_PCM_OUT_VOLUME 0x18
 
+/* snd values */
+#define AC97_SND_NAME "Intel AC'97"
+#define AC97_PLAYBACK_SPEED 48000
+#define AC97_PLAYBACK_FORMAT SND_FORMAT_L16LE
+
 /* An entry in a buffer dscriptor list */
 typedef struct {
 	uint32_t pointer;  /* Pointer to buffer */
@@ -79,6 +85,13 @@ typedef struct {
 } ac97_device_t;
 
 static ac97_device_t _device;
+static snd_device_t _snd = {
+	AC97_SND_NAME,
+	&_device,
+	AC97_PLAYBACK_SPEED,
+	AC97_PLAYBACK_FORMAT,
+	NULL,
+};
 
 static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
 
@@ -278,12 +291,15 @@ static int init(void) {
 	/* Tell the ac97 where our BDL is */
 	outportl(_device.nabmbar + AC97_PO_BDBAR, bdl_p);
 
+	snd_register(&_snd);
 	debug_print(NOTICE, "AC97 initialized successfully");
 
 	return 0;
 }
 
 static int fini(void) {
+	snd_unregister(&_snd);
+
 	free(_device.bdl);
 	for (int i = 0; i < AC97_BDL_LEN; i++) {
 		free(_device.bufs[i]);
@@ -293,3 +309,4 @@ static int fini(void) {
 
 MODULE_DEF(ac97, init, fini);
 MODULE_DEPENDS(debugshell);
+MODULE_DEPENDS(snd);
