@@ -128,6 +128,7 @@ void * module_load_direct(void * blob, size_t length) {
 		for (unsigned int x = 0; x < (unsigned int)target->e_shentsize * target->e_shnum; x += target->e_shentsize) {
 			Elf32_Shdr * shdr = (Elf32_Shdr *)((uintptr_t)target + (target->e_shoff + x));
 			if (shdr->sh_type == SHT_NOBITS) {
+				debug_print(ERROR, "Loading NOBITS sized %d", shdr->sh_size);
 				shdr->sh_addr = (Elf32_Addr)malloc(shdr->sh_size);
 				memset((void *)shdr->sh_addr, 0x00, shdr->sh_size);
 			} else {
