@@ -91,7 +91,6 @@ static snd_device_t _snd = {
 	&_device,
 	AC97_PLAYBACK_SPEED,
 	AC97_PLAYBACK_FORMAT,
-	NULL,
 };
 
 /* 

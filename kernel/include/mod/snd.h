@@ -11,9 +11,6 @@ typedef struct snd_device {
 	void * device;             /* Private data for the device. May be NULL. */
 	uint32_t playback_speed;   /* Playback speed in Hz */
 	uint32_t playback_format;  /* Playback format (SND_FORMAT_*) */
-
-	/* Call to play the contents of a buffer */
-	int (*playback)(struct snd_device * device, const void * buf, size_t count);
 } snd_device_t;
 
 int snd_register(snd_device_t * device);
