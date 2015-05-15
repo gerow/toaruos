@@ -20,6 +20,8 @@
 
 static uint32_t snd_write(fs_node_t * node, uint32_t offset, uint32_t size, uint8_t *buffer);
 static int snd_ioctl(fs_node_t * node, int request, void * argp);
+static void snd_open(fs_node_t * node, unsigned int flags);
+static void snd_close(fs_node_t * node);
 
 static uint8_t  _devices_lock;
 static list_t _devices;
@@ -29,8 +31,11 @@ static fs_node_t _main_fnode = {
 	.flags = FS_CHARDEVICE,
 	.ioctl = snd_ioctl,
 	.write = snd_write,
+	.open = snd_open,
+	.close = snd_close,
 };
-static ring_buffer_t * _buf;
+static uint8_t _buffers_lock;
+static list_t _buffers;
 
 int snd_register(snd_device_t * device) {
 	int rv = 0;
@@ -42,6 +47,7 @@ int snd_register(snd_device_t * device) {
 		rv = -1;
 		goto snd_register_cleanup;
 	}
+	list_insert(&_devices, device);
 	debug_print(NOTICE, "[snd] %s registered", device->name);
 
 snd_register_cleanup:
@@ -67,39 +73,70 @@ snd_unregister_cleanup:
 }
 
 static uint32_t snd_write(fs_node_t * node, uint32_t offset, uint32_t size, uint8_t *buffer) {
-	return ring_buffer_write(_buf, size, buffer);
+	return ring_buffer_write(node->device, size, buffer);
 }
 
 static int snd_ioctl(fs_node_t * node, int request, void * argp) {
 	return -1;
 }
 
-int snd_request_buf(snd_device_t * device, uint32_t size, uint8_t *buffer) {
-	debug_print(NOTICE, "[snd] got request for %d bytes from %s", size, device->name);
-	/* Add check to make sure this is the first device, otherwise ignore */
-	size_t read_size = MIN(ring_buffer_unread(_buf), size);
-	debug_print(NOTICE, "[snd] reading %d bytes from buffer", read_size);
-	if (read_size) {
-		ring_buffer_read(_buf, read_size, buffer);
-	}
-	if (read_size != size) {
-		buffer += read_size;
-		debug_print(NOTICE, "[snd] filling in %d zeroes", size - read_size);
-		memset(buffer, 0, size - read_size);
-	}
+static void snd_open(fs_node_t * node, unsigned int flags) {
+	/* 
+	 * XXX(gerow): A process could take the memory of the entire system by opening
+	 * too many of these...
+	 */
+	/* Allocate a buffer for the node and keep a reference for ourselves */
+	node->device = ring_buffer_create(SND_BUF_SIZE);
+	spin_lock(&_buffers_lock);
+	list_insert(&_buffers, node->device);
+	spin_unlock(&_buffers_lock);
+}
 
-	return read_size;
+static void snd_close(fs_node_t * node) {
+	spin_lock(&_buffers_lock);
+	list_delete(&_buffers, list_find(&_buffers, node->device));
+	spin_unlock(&_buffers_lock);
+}
+
+int snd_request_buf(snd_device_t * device, uint32_t size, uint8_t *buffer) {
+	static uint8_t tmp_buf[0x100];
+
+	debug_print(NOTICE, "[snd] got request for %d bytes from %s", size, device->name);
+	memset(buffer, 0, size);
+
+	spin_lock(&_buffers_lock);
+	foreach(buf_node, &_buffers) {
+		ring_buffer_t * buf = buf_node->value;
+		/* ~0x3 is to ensure we don't read partial samples or just a single channel */
+		size_t read_size = MIN(ring_buffer_unread(buf) & ~0x3, size);
+		size_t bytes_left = read_size;
+		uint8_t * adding_ptr = buffer;
+		while (bytes_left) {
+			size_t this_read_size = MIN(bytes_left, sizeof(tmp_buf));
+			ring_buffer_read(buf, this_read_size, tmp_buf);
+			int16_t *ducking_ptr = (int16_t *)tmp_buf;
+			for (size_t i = 0; i < sizeof(tmp_buf) / sizeof(*ducking_ptr); i++) {
+				ducking_ptr[i] /= 2;
+			}
+			for (size_t i = 0; i < this_read_size; i++) {
+				adding_ptr[i] += tmp_buf[i];
+			}
+			adding_ptr += this_read_size;
+			bytes_left -= this_read_size;
+		}
+	}
+	spin_unlock(&_buffers_lock);
+
+	return size;
 }
 
 static int init(void) {
-	_buf = ring_buffer_create(SND_BUF_SIZE);
 	vfs_mount("/dev/dsp", &_main_fnode);
 	return 0;
 }
 
 static int fini(void) {
 	/* umount? */
-	ring_buffer_destroy(_buf);
 	return 0;
 }
 
