@@ -98,7 +98,6 @@ static snd_device_t _snd = {
  * This could be unnecessary if we instead allocate just two buffers and make
  * the ac97 think there are more.
  */
-static uint16_t _snd_buf[AC97_BDL_BUFFER_LEN * AC97_BDL_LEN / 2];
 
 static void find_ac97(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
 
@@ -145,7 +144,6 @@ static void irq_handler(struct regs * regs) {
 		debug_print(NOTICE, "Last valid buffer completion interrupt handled");
 	} else if (sr & AC97_X_SR_BCIS) {
 		debug_print(NOTICE, "Buffer completion interrupt status start...");
-		snd_request_buf(&_snd, sizeof(_snd_buf), (uint8_t *)&_snd_buf);
 		size_t start;
 		if (_device.lvi == AC97_BDL_LEN / 2 - 1) {
 			_device.lvi = AC97_BDL_LEN - 1;
@@ -155,10 +153,8 @@ static void irq_handler(struct regs * regs) {
 			start = 0;
 		}
 
-		uint8_t *buf_ptr = (uint8_t *)_snd_buf;
 		for (int i = start; i <= _device.lvi; i++) {
-			memcpy(_device.bufs[i], buf_ptr, sizeof(*_device.bufs[0]));
-			buf_ptr += sizeof(_device.bufs[0]);
+			snd_request_buf(&_snd, AC97_BDL_BUFFER_LEN * sizeof(*_device.bufs[0]), (uint8_t *)_device.bufs[i]);
 		}
 		outportb(_device.nabmbar + AC97_PO_LVI, _device.lvi);
 		outports(_device.nabmbar + AC97_PO_SR, AC97_X_SR_BCIS);

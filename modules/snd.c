@@ -16,7 +16,7 @@
 /* Utility macros */
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
-#define SND_BUF_SIZE 0x1000 * 32 * 2
+#define SND_BUF_SIZE 0x40000
 
 static uint32_t snd_write(fs_node_t * node, uint32_t offset, uint32_t size, uint8_t *buffer);
 static int snd_ioctl(fs_node_t * node, int request, void * argp);
@@ -30,7 +30,7 @@ static fs_node_t _main_fnode = {
 	.ioctl = snd_ioctl,
 	.write = snd_write,
 };
-static ring_buffer_t *_buf;
+static ring_buffer_t * _buf;
 
 int snd_register(snd_device_t * device) {
 	int rv = 0;
