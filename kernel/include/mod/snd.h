@@ -18,5 +18,6 @@ typedef struct snd_device {
 
 int snd_register(snd_device_t * device);
 int snd_unregister(snd_device_t * device);
+int snd_request_buf(snd_device_t * device, uint32_t size, uint8_t *buffer);
 
 #endif  /* KERNEL_MOD_SND_H */
