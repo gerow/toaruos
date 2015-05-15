@@ -66,7 +66,7 @@
 /* snd values */
 #define AC97_SND_NAME "Intel AC'97"
 #define AC97_PLAYBACK_SPEED 48000
-#define AC97_PLAYBACK_FORMAT SND_FORMAT_L16LE
+#define AC97_PLAYBACK_FORMAT SND_FORMAT_L16SLE
 
 /* An entry in a buffer dscriptor list */
 typedef struct {
@@ -210,7 +210,6 @@ static int init(void) {
 	outportb(_device.nabmbar + AC97_PO_LVI, _device.lvi);
 
 	snd_register(&_snd);
-
 
 	/* Start things playing */
 	outportb(_device.nabmbar + AC97_PO_CR, inportb(_device.nabmbar + AC97_PO_CR) | AC97_X_CR_RPBM);

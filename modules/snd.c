@@ -4,6 +4,11 @@
  * Copyright (C) 2015 Mike Gerow
  *
  * Sound subsystem.
+ *
+ * Currently has the ability to mix several sound sources together. Could use
+ * a /dev/mixer device to allow changing of audio settings. Also could use
+ * the ability to change frequency and format for audio samples. Also doesn't
+ * really support multiple devices despite the interface suggesting it might...
  */
 
 #include <mod/snd.h>
@@ -24,15 +29,15 @@ static void snd_open(fs_node_t * node, unsigned int flags);
 static void snd_close(fs_node_t * node);
 
 static uint8_t  _devices_lock;
-static list_t _devices;
+static list_t _devices; 
 static fs_node_t _main_fnode = {
-	.name = "dsp",
+	.name   = "dsp",
 	.device = &_devices,
-	.flags = FS_CHARDEVICE,
-	.ioctl = snd_ioctl,
-	.write = snd_write,
-	.open = snd_open,
-	.close = snd_close,
+	.flags  = FS_CHARDEVICE,
+	.ioctl  = snd_ioctl,
+	.write  = snd_write,
+	.open   = snd_open,
+	.close  = snd_close,
 };
 static uint8_t _buffers_lock;
 static list_t _buffers;
@@ -77,6 +82,7 @@ static uint32_t snd_write(fs_node_t * node, uint32_t offset, uint32_t size, uint
 }
 
 static int snd_ioctl(fs_node_t * node, int request, void * argp) {
+	/* Potentially use this to set sample rates in the future */
 	return -1;
 }
 
@@ -114,7 +120,12 @@ int snd_request_buf(snd_device_t * device, uint32_t size, uint8_t *buffer) {
 		while (bytes_left) {
 			size_t this_read_size = MIN(bytes_left, sizeof(tmp_buf));
 			ring_buffer_read(buf, this_read_size, tmp_buf);
-			int16_t *ducking_ptr = (int16_t *)tmp_buf;
+			int16_t * ducking_ptr = (int16_t *)tmp_buf;
+			/*
+			 * Reduce the sample by a half so that multiple sources won't immediately
+			 * cause awful clipping. This is kind of a hack since it would probably be
+			 * better to just use some kind of compressor.
+			 */
 			for (size_t i = 0; i < sizeof(tmp_buf) / sizeof(*ducking_ptr); i++) {
 				ducking_ptr[i] /= 2;
 			}
