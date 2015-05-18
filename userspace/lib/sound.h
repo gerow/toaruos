@@ -1,10 +1,11 @@
 #ifndef USERSPACE_LIB_SOUND_H
 #define USERSPACE_LIB_SOUND_H
 
-#include <types.h>
+#include <stdint.h>
 
 #define SND_MAX_KNOBS 256
 #define SND_KNOB_NAME_SIZE 256
+#define SND_KNOB_MAX_VALUE UINT32_MAX
 
 #define SND_KNOB_MASTER 0
 #define SND_DEVICE_MAIN 0
