@@ -653,6 +653,10 @@ static int sys_mount(char * arg, char * mountpoint, char * type, unsigned long f
 	return vfs_mount_type(type, arg, mountpoint);
 }
 
+static int sys_symlink(char * target, char * name) {
+	return symlink_fs(target, name);
+}
+
 /*
  * System Call Internals
  */
@@ -702,6 +706,7 @@ static int (*syscalls[])() = {
 	[SYS_WAITPID]      = sys_waitpid,
 	[SYS_PIPE]         = sys_pipe,
 	[SYS_MOUNT]        = sys_mount,
+	[SYS_SYMLINK]      = sys_symlink,
 };
 
 uint32_t num_syscalls = sizeof(syscalls) / sizeof(int (*)());
