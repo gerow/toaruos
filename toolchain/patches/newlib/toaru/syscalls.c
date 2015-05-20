@@ -89,6 +89,7 @@ DEFN_SYSCALL1(unlink, 52, char *);
 DEFN_SYSCALL3(waitpid, 53, int, int *, int);
 DEFN_SYSCALL1(pipe, 54, int *);
 DEFN_SYSCALL5(mount, SYS_MOUNT, char *, char *, char *, unsigned long, void *);
+DEFN_SYSCALL2(symlink, SYS_SYMLINK, char *, char *);
 
 static int toaru_debug_stubs_enabled(void) {
 	static int checked = 0;
@@ -679,6 +680,17 @@ void sync() {
 
 int mount(char * source, char * target, char * type, unsigned long flags, void * data) {
 	int r = syscall_mount(source, target, type, flags, data);
+
+	if (r < 0) {
+		errno = -r;
+		return -1;
+	}
+
+	return r;
+}
+
+int symlink(char * target, char * name) {
+	int r = syscall_symlink(target, name);
 
 	if (r < 0) {
 		errno = -r;
