@@ -42,3 +42,5 @@
 #define SYS_WAITPID 53
 #define SYS_PIPE 54
 #define SYS_MOUNT 55
+#define SYS_SYMLINK 56
+#define SYS_READLINK 57
