@@ -336,26 +336,14 @@ int symlink_fs(char * value, char * name) {
 	return 0;
 }
 
-int readlink_fs(char * name, char * buf, size_t size) {
-	char * cwd = (char *)(current_process->wd_name);
-	char * path = canonicalize_path(cwd, name);
-	fs_node_t * parent = open_parent(path);
-	char * f_path = get_child_path(path);
+int readlink_fs(fs_node_t * node, char * buf, size_t size) {
+	if (!node) return -1;
 
-	if (!parent) {
-		free(path);
+	if (node->readlink) {
+		return node->readlink(node, buf, size);
+	} else {
 		return -1;
 	}
-
-	if (parent->readlink) {
-		parent->readlink(parent, f_path, buf, size);
-	}
-
-	close_fs(parent);
-	free(parent);
-	free(path);
-
-	return 0;
 }
 
 int mkdir_fs(char *name, uint16_t permission) {

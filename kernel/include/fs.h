@@ -48,7 +48,7 @@ typedef int (*ioctl_type_t) (struct fs_node *, int request, void * argp);
 typedef int (*get_size_type_t) (struct fs_node *);
 typedef int (*chmod_type_t) (struct fs_node *, int mode);
 typedef void (*symlink_type_t) (struct fs_node *, char * name, char * value);
-typedef void (*readlink_type_t) (struct fs_node *, char * name, char * buf, size_t size);
+typedef int (*readlink_type_t) (struct fs_node *, char * buf, size_t size);
 
 typedef struct fs_node {
 	char name[256];         /* The filename. */
@@ -134,7 +134,7 @@ int ioctl_fs(fs_node_t *node, int request, void * argp);
 int chmod_fs(fs_node_t *node, int mode);
 int unlink_fs(char * name);
 int symlink_fs(char * value, char * name);
-int readlink_fs(char * name, char * buf, size_t size);
+int readlink_fs(fs_node_t * node, char * buf, size_t size);
 
 void vfs_install(void);
 void * vfs_mount(char * path, fs_node_t * local_root);
