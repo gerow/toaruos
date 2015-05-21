@@ -653,11 +653,23 @@ static int sys_mount(char * arg, char * mountpoint, char * type, unsigned long f
 	return vfs_mount_type(type, arg, mountpoint);
 }
 
-/*
 static int sys_symlink(char * target, char * name) {
+	validate(target);
+	validate(name);
 	return symlink_fs(target, name);
 }
-*/
+
+static int sys_readlink(int fd, char * ptr, int len) {
+	if (fd >= (int)current_process->fds->length || fd < 0) {
+		return -1;
+	}
+	if (current_process->fds->entries[fd] == NULL) {
+		return -1;
+	}
+	validate(ptr);
+	fs_node_t * node = current_process->fds->entries[fd];
+	return readlink_fs(node, ptr, len);
+}
 
 /*
  * System Call Internals
@@ -708,9 +720,8 @@ static int (*syscalls[])() = {
 	[SYS_WAITPID]      = sys_waitpid,
 	[SYS_PIPE]         = sys_pipe,
 	[SYS_MOUNT]        = sys_mount,
-	/*
 	[SYS_SYMLINK]      = sys_symlink,
-	*/
+	[SYS_READLINK]     = sys_readlink,
 };
 
 uint32_t num_syscalls = sizeof(syscalls) / sizeof(int (*)());

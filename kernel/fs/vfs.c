@@ -400,6 +400,17 @@ int symlink_fs(char * target, char * name) {
 	return 0;
 }
 
+int readlink_fs(fs_node_t *node, char * buf, uint32_t size) {
+	if (!node) return -1;
+
+	if (node->readlink) {
+		return node->readlink(node, buf, size);
+	} else {
+		return -1;
+	}
+}
+
+
 /**
  * canonicalize_path: Canonicalize a path.
  *

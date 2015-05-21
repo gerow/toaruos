@@ -1246,8 +1246,10 @@ static struct dirent * readdir_ext2(fs_node_t *node, uint32_t index) {
 }
 
 static void symlink_ext2(fs_node_t * parent, char * name, char * target) {
+	debug_print(CRITICAL, "symlink_ext2 got called");
 	if (!name) return;
 
+	debug_print(CRITICAL, "we're actually doing shit");
 	ext2_fs_t * this = parent->device;
 
 	/* first off, check if it exists */
