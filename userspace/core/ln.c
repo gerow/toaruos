@@ -9,7 +9,7 @@
 #include <unistd.h>
 
 static const char usage[] =
-"Usage  %s [-s] TARGET NAME\n"
+"Usage: %s [-s] TARGET NAME\n"
 "    -s: Create a symbolic link.\n"
 "    -h: Print this help message and exit.\n";
 
