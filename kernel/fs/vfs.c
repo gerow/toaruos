@@ -21,9 +21,6 @@ fs_node_t * fs_root = NULL; /* Pointer to the root mount fs_node (must be some f
 
 hashmap_t * fs_types = NULL;
 
-/* Forward declarations */
-char *canonicalize_path(char *cwd, char *input);
-
 
 static struct dirent * readdir_mapper(fs_node_t *node, uint32_t index) {
 	tree_node_t * d = (tree_node_t *)node->device;
@@ -68,33 +65,6 @@ static fs_node_t * vfs_mapper(void) {
 	fnode->flags   = FS_DIRECTORY;
 	fnode->readdir = readdir_mapper;
 	return fnode;
-}
-
-
-static fs_node_t * open_parent(char * path) {
-	fs_node_t * parent;
-
-	char * parent_path = malloc(strlen(path) + 4);
-	sprintf(parent_path, "%s/..", path);
-
-	parent = kopen(parent_path, 0);
-	free(parent_path);
-
-	return parent;
-}
-
-
-static char * get_child_path(char * path) {
-	char * f_path = path + strlen(path) - 1;
-	while (f_path > path) {
-		if (*f_path == '/') {
-			f_path += 1;
-			break;
-		}
-		f_path--;
-	}
-
-	return f_path;
 }
 
 
@@ -271,10 +241,26 @@ int ioctl_fs(fs_node_t *node, int request, void * argp) {
  */
 
 int create_file_fs(char *name, uint16_t permission) {
-	char * cwd = (char *)(current_process->wd_name);
-	char * path = canonicalize_path(cwd, name);
-	fs_node_t * parent = open_parent(path);
-	char * f_path = get_child_path(path);
+	fs_node_t * parent;
+	char *cwd = (char *)(current_process->wd_name);
+	char *path = canonicalize_path(cwd, name);
+
+	char * parent_path = malloc(strlen(path) + 4);
+	sprintf(parent_path, "%s/..", path);
+
+	char * f_path = path + strlen(path) - 1;
+	while (f_path > path) {
+		if (*f_path == '/') {
+			f_path += 1;
+			break;
+		}
+		f_path--;
+	}
+
+	debug_print(WARNING, "creating file %s within %s (hope these strings are good)", f_path, parent_path);
+
+	parent = kopen(parent_path, 0);
+	free(parent_path);
 
 	if (!parent) {
 		free(path);
@@ -285,18 +271,33 @@ int create_file_fs(char *name, uint16_t permission) {
 		parent->create(parent, f_path, permission);
 	}
 
-	close_fs(parent);
-	free(parent);
 	free(path);
+	free(parent);
 
 	return 0;
 }
 
 int unlink_fs(char * name) {
-	char * cwd = (char *)(current_process->wd_name);
-	char * path = canonicalize_path(cwd, name);
-	fs_node_t * parent = open_parent(path);
-	char * f_path = get_child_path(path);
+	fs_node_t * parent;
+	char *cwd = (char *)(current_process->wd_name);
+	char *path = canonicalize_path(cwd, name);
+
+	char * parent_path = malloc(strlen(path) + 4);
+	sprintf(parent_path, "%s/..", path);
+
+	char * f_path = path + strlen(path) - 1;
+	while (f_path > path) {
+		if (*f_path == '/') {
+			f_path += 1;
+			break;
+		}
+		f_path--;
+	}
+
+	debug_print(WARNING, "unlinking file %s within %s (hope these strings are good)", f_path, parent_path);
+
+	parent = kopen(parent_path, 0);
+	free(parent_path);
 
 	if (!parent) {
 		free(path);
@@ -307,50 +308,33 @@ int unlink_fs(char * name) {
 		parent->unlink(parent, f_path);
 	}
 
-	close_fs(parent);
-	free(parent);
 	free(path);
+	free(parent);
 
 	return 0;
-}
-
-int symlink_fs(char * value, char * name) {
-	char * cwd = (char *)(current_process->wd_name);
-	char * path = canonicalize_path(cwd, name);
-	fs_node_t * parent = open_parent(path);
-	char * f_path = get_child_path(path);
-
-	if (!parent) {
-		free(path);
-		return -1;
-	}
-
-	if (parent->symlink) {
-		parent->symlink(parent, f_path, value);
-	}
-
-	close_fs(parent);
-	free(parent);
-	free(path);
-
-	return 0;
-}
-
-int readlink_fs(fs_node_t * node, char * buf, size_t size) {
-	if (!node) return -1;
-
-	if (node->readlink) {
-		return node->readlink(node, buf, size);
-	} else {
-		return -1;
-	}
 }
 
 int mkdir_fs(char *name, uint16_t permission) {
-	char * cwd = (char *)(current_process->wd_name);
-	char * path = canonicalize_path(cwd, name);
-	fs_node_t * parent = open_parent(path);
-	char * f_path = get_child_path(path);
+	fs_node_t * parent;
+	char *cwd = (char *)(current_process->wd_name);
+	char *path = canonicalize_path(cwd, name);
+
+	char * parent_path = malloc(strlen(path) + 4);
+	sprintf(parent_path, "%s/..", path);
+
+	char * f_path = path + strlen(path) - 1;
+	while (f_path > path) {
+		if (*f_path == '/') {
+			f_path += 1;
+			break;
+		}
+		f_path--;
+	}
+
+	debug_print(WARNING, "creating directory %s within %s (hope these strings are good)", f_path, parent_path);
+
+	parent = kopen(parent_path, 0);
+	free(parent_path);
 
 	if (!parent) {
 		free(path);
@@ -361,9 +345,8 @@ int mkdir_fs(char *name, uint16_t permission) {
 		parent->mkdir(parent, f_path, permission);
 	}
 
-	close_fs(parent);
-	free(parent);
 	free(path);
+	close_fs(parent);
 
 	return 0;
 }
@@ -378,6 +361,43 @@ fs_node_t *clone_fs(fs_node_t *source) {
 	}
 
 	return source;
+}
+
+int symlink_fs(char * target, char * name) {
+	fs_node_t * parent;
+	char *cwd = (char *)(current_process->wd_name);
+	char *path = canonicalize_path(cwd, name);
+
+	char * parent_path = malloc(strlen(path) + 4);
+	sprintf(parent_path, "%s/..", path);
+
+	char * f_path = path + strlen(path) - 1;
+	while (f_path > path) {
+		if (*f_path == '/') {
+			f_path += 1;
+			break;
+		}
+		f_path--;
+	}
+
+	debug_print(WARNING, "creating symlink %s within %s", f_path, parent_path);
+
+	parent = kopen(parent_path, 0);
+	free(parent_path);
+
+	if (!parent) {
+		free(path);
+		return -1;
+	}
+
+	if (parent->symlink) {
+		parent->symlink(parent, target, f_path);
+	}
+
+	free(path);
+	close_fs(parent);
+
+	return 0;
 }
 
 /**
