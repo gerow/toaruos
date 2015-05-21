@@ -653,10 +653,10 @@ static int sys_mount(char * arg, char * mountpoint, char * type, unsigned long f
 	return vfs_mount_type(type, arg, mountpoint);
 }
 
-static int sys_symlink(char * target, char * name) {
-	validate(target);
-	validate(name);
-	return symlink_fs(target, name);
+static int sys_symlink(char * oldname, char * newname) {
+	validate(oldname);
+	validate(newname);
+	return symlink_fs(newname, oldname);
 }
 
 static int sys_readlink(int fd, char * ptr, int len) {
