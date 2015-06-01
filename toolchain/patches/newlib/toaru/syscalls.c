@@ -91,6 +91,7 @@ DEFN_SYSCALL1(pipe, 54, int *);
 DEFN_SYSCALL5(mount, SYS_MOUNT, char *, char *, char *, unsigned long, void *);
 DEFN_SYSCALL2(symlink, SYS_SYMLINK, char *, char *);
 DEFN_SYSCALL3(readlink, SYS_READLINK, char *, char *, int);
+DEFN_SYSCALL2(lstat, SYS_LSTAT, char *, void *);
 
 static int toaru_debug_stubs_enabled(void) {
 	static int checked = 0;
@@ -322,7 +323,14 @@ char *getwd(char *buf) {
 }
 
 int lstat(const char *path, struct stat *buf) {
-	return stat(path, buf);
+	int ret = syscall_lstat((char *)file, (void *)st);
+	if (ret >= 0) {
+		return ret;
+	} else {
+		errno = -ret;
+		memset(st, 0x00, sizeof(struct stat));
+		return ret;;
+	}
 }
 
 int mkdir(const char *pathname, mode_t mode) {

@@ -306,7 +306,7 @@ static int display_dir(char * p) {
 
 			char tmp[strlen(p)+strlen(ent->d_name)+1];
 			sprintf(tmp, "%s/%s", p, ent->d_name);
-			int t = stat(tmp, &f->statbuf);
+			int t = lstat(tmp, &f->statbuf);
 
 			list_insert(ents_list, (void *)f);
 		}

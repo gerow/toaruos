@@ -680,6 +680,18 @@ static int sys_readlink(const char * file, char * ptr, int len) {
 	return rv;
 }
 
+static int sys_lstat(char * file, uintptr_t st) {
+	int result;
+	PTR_VALIDATE(file);
+	PTR_VALIDATE(st);
+	fs_node_t * fn = kopen(file, O_PATH | O_NOFOLLOW);
+	result = stat_node(fn, st);
+	if (fn) {
+		close_fs(fn);
+	}
+	return result;
+}
+
 /*
  * System Call Internals
  */
@@ -731,6 +743,7 @@ static int (*syscalls[])() = {
 	[SYS_MOUNT]        = sys_mount,
 	[SYS_SYMLINK]      = sys_symlink,
 	[SYS_READLINK]     = sys_readlink,
+	[SYS_LSTAT]        = sys_lstat,
 };
 
 uint32_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);

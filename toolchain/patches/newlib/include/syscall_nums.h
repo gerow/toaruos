@@ -44,3 +44,4 @@
 #define SYS_MOUNT 55
 #define SYS_SYMLINK 56
 #define SYS_READLINK 57
+#define SYS_LSTAT 58
