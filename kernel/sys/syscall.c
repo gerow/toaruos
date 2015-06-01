@@ -663,10 +663,10 @@ static int sys_mount(char * arg, char * mountpoint, char * type, unsigned long f
 	return -EFAULT;
 }
 
-static int sys_symlink(char * oldname, char * newname) {
-	validate(oldname);
-	validate(newname);
-	return symlink_fs(newname, oldname);
+static int sys_symlink(char * target, char * name) {
+	PTR_VALIDATE(target);
+	PTR_VALIDATE(name);
+	return symlink_fs(target, name);
 }
 
 static int sys_readlink(const char * file, char * ptr, int len) {

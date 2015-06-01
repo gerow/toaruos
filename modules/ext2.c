@@ -1245,7 +1245,7 @@ static struct dirent * readdir_ext2(fs_node_t *node, uint32_t index) {
 	return dirent;
 }
 
-static void symlink_ext2(fs_node_t * parent, char * name, char * target) {
+static void symlink_ext2(fs_node_t * parent, char * target, char * name) {
 	debug_print(CRITICAL, "symlink_ext2 got called");
 	if (!name) return;
 
