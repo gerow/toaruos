@@ -24,6 +24,6 @@ int main(int argc, char * argv[]) {
 		perror("link");
 		exit(EXIT_FAILURE);
 	}
-	fprintf(stdout, "%s", buf);
+	fprintf(stdout, "%s\n", buf);
 	exit(EXIT_SUCCESS);
 }

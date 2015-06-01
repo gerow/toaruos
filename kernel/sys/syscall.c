@@ -669,16 +669,15 @@ static int sys_symlink(char * oldname, char * newname) {
 	return symlink_fs(newname, oldname);
 }
 
-static int sys_readlink(int fd, char * ptr, int len) {
-	if (fd >= (int)current_process->fds->length || fd < 0) {
-		return -1;
+static int sys_readlink(const char * file, char * ptr, int len) {
+	PTR_VALIDATE(file);
+	fs_node_t * node = kopen((char *) file, 0);
+	if (!node) {
+		return -ENOENT;
 	}
-	if (current_process->fds->entries[fd] == NULL) {
-		return -1;
-	}
-	validate(ptr);
-	fs_node_t * node = current_process->fds->entries[fd];
-	return readlink_fs(node, ptr, len);
+	int rv = readlink_fs(node, ptr, len);
+	close_fs(node);
+	return rv;
 }
 
 /*
