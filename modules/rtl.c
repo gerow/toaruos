@@ -13,6 +13,9 @@
 #include <ipv4.h>
 #include <mod/shell.h>
 
+/* XXX move this to ipv4? */
+extern size_t print_dns_name(fs_node_t * tty, struct dns_packet * dns, size_t offset);
+
 static uint32_t rtl_device_pci = 0x00000000;
 
 static void find_rtl(uint32_t device, uint16_t vendorid, uint16_t deviceid, void * extra) {
@@ -38,7 +41,9 @@ static void find_rtl(uint32_t device, uint16_t vendorid, uint16_t deviceid, void
 
 static void net_handler_enqueue(void * buffer);
 static list_t * net_queue = NULL;
-static volatile uint8_t net_queue_lock = 0;
+//static volatile uint8_t net_queue_lock = 0;
+
+static spin_lock_t net_queue_lock = { 0 };
 
 static int rtl_irq = 0;
 static uint32_t rtl_iobase = 0;
@@ -62,16 +67,17 @@ static fs_node_t * irc_socket;
 static uint32_t seq_no = 0xff0000;
 static uint32_t ack_no = 0x0;
 
-static volatile uint8_t _lock;
+//static volatile uint8_t _lock;
+static spin_lock_t _lock;
 static int next_tx_buf(void) {
 	int out;
-	spin_lock(&_lock);
+	spin_lock(_lock);
 	out = next_tx;
 	next_tx++;
 	if (next_tx == 4) {
 		next_tx = 0;
 	}
-	spin_unlock(&_lock);
+	spin_unlock(_lock);
 	return out;
 }
 
@@ -397,7 +403,9 @@ static char irc_input[400] = {'\0'};
 static char irc_prompt[100] = {'\0'};
 static char irc_nick[32] = {'\0'};
 static char irc_payload[512];
-static volatile uint8_t irc_tty_lock = 0;
+
+static spin_lock_t irc_tty_lock = { 0 };
+//static volatile uint8_t irc_tty_lock = 0;
 //static struct netif rtl_netif;
 
 static void irc_send(char * payload) {
@@ -419,7 +427,7 @@ static void handle_irc_packet(fs_node_t * tty, size_t size, uint8_t * packet) {
 		if ((uintptr_t)e > (uintptr_t)packet + size) {
 			break;
 		}
-		spin_lock(&irc_tty_lock);
+		spin_lock(irc_tty_lock);
 
 		if (!e) {
 			/* XXX */
@@ -442,7 +450,7 @@ static void handle_irc_packet(fs_node_t * tty, size_t size, uint8_t * packet) {
 		char * command;
 		char * channel;
 		char * message;
-		
+
 		user = c;
 
 		command = strstr(user, " ");
@@ -495,7 +503,7 @@ prompt_:
 		fprintf(tty, "%s", irc_prompt);
 		fprintf(tty, "%s", irc_input);
 
-		spin_unlock(&irc_tty_lock);
+		spin_unlock(irc_tty_lock);
 
 		if (!e) break;
 
@@ -571,8 +579,6 @@ static void net_handle_tcp(struct tcp_header * tcp, size_t length) {
 			write_fs(_atty, 0, data_length, tcp->payload);
 		}
 
-
-_foo:
 		{
 			/* Send ACK */
 			int my_tx = next_tx_buf();
@@ -589,7 +595,7 @@ _foo:
 
 static void net_handle_udp(struct udp_packet * udp, size_t length) {
 
-	size_t data_length = length - sizeof(struct tcp_header);
+	// size_t data_length = length - sizeof(struct tcp_header);
 
 	/* Find socket */
 	if (hashmap_has(_udp_sockets, (void *)ntohs(udp->source_port))) {
@@ -621,11 +627,11 @@ static struct ethernet_packet * net_receive(void) {
 	while (!net_queue->length) {
 		sleep_on(rx_wait);
 	}
-	spin_lock(&net_queue_lock);
+	spin_lock(net_queue_lock);
 	node_t * n = list_dequeue(net_queue);
 	struct ethernet_packet * eth = (struct ethernet_packet *)n->value;
 	free(n);
-	spin_unlock(&net_queue_lock);
+	spin_unlock(net_queue_lock);
 
 	return eth;
 }
@@ -654,11 +660,11 @@ static void net_handler(void * data, char * name) {
 static void net_handler_enqueue(void * buffer) {
 	/* XXX size? source? */
 
-	spin_lock(&net_queue_lock);
+	spin_lock(net_queue_lock);
 
 	list_insert(net_queue, buffer);
 
-	spin_unlock(&net_queue_lock);
+	spin_unlock(net_queue_lock);
 }
 
 static void parse_dns_response(fs_node_t * tty, void * last_packet) {
@@ -953,11 +959,11 @@ static int tty_readline(fs_node_t * dev, char * linebuf, int max) {
 			debug_print(WARNING, "Read nothing?");
 			continue;
 		}
-		spin_lock(&irc_tty_lock);
+		spin_lock(irc_tty_lock);
 		linebuf[read] = buf[0];
 		if (buf[0] == '\n') {
 			linebuf[read] = 0;
-			spin_unlock(&irc_tty_lock);
+			spin_unlock(irc_tty_lock);
 			break;
 		} else if (buf[0] == 0x08) {
 			if (read > 0) {
@@ -969,18 +975,18 @@ static int tty_readline(fs_node_t * dev, char * linebuf, int max) {
 			switch (buf[0]) {
 				case 0x0C: /* ^L */
 					/* Should reset display here */
-					spin_unlock(&irc_tty_lock);
+					spin_unlock(irc_tty_lock);
 					break;
 				default:
 					/* do nothing */
-					spin_unlock(&irc_tty_lock);
+					spin_unlock(irc_tty_lock);
 					break;
 			}
 		} else {
 			fprintf(dev, "%c", buf[0]);
 			read += r;
 		}
-		spin_unlock(&irc_tty_lock);
+		spin_unlock(irc_tty_lock);
 	}
 	tty_set_buffered(dev);
 	return read;
@@ -1032,6 +1038,46 @@ DEFINE_SHELL_FUNCTION(irc_init, "irc connector") {
 	return 0;
 }
 
+static char * log_channel = NULL;
+
+static uint32_t irc_write(fs_node_t * node, uint32_t offset, uint32_t size, uint8_t *buffer) {
+	sprintf(irc_payload, "PRIVMSG %s :%s\r\n", log_channel, buffer);
+	irc_send(irc_payload);
+	return size;
+}
+
+static fs_node_t _irc_log_fnode = {
+	.name  = "irc_log",
+	.write  = irc_write,
+};
+
+DEFINE_SHELL_FUNCTION(irc_log, "spew debug log to irc") {
+
+	if (argc < 2) {
+		fprintf(tty, "Need a channel to log to.\n");
+		return 1;
+	}
+
+	if (!strlen(irc_nick)) {
+		fprintf(tty, "Did you run irc_init?\n");
+		return 1;
+	}
+
+	fprintf(tty, "May the gods have mercy on your soul.\n");
+
+	log_channel = strdup(argv[1]);
+
+	sprintf(irc_payload, "JOIN %s\r\n", log_channel);
+	irc_send(irc_payload);
+
+	debug_file = &_irc_log_fnode;
+	if (argc > 2) {
+		debug_level = atoi(argv[2]);
+	}
+
+	return 0;
+}
+
 DEFINE_SHELL_FUNCTION(irc_join, "irc channel tool") {
 
 	if (argc < 2) {
@@ -1050,7 +1096,7 @@ DEFINE_SHELL_FUNCTION(irc_join, "irc channel tool") {
 		fprintf(tty, irc_prompt);
 		int c = tty_readline(tty, irc_input, 400);
 
-		spin_lock(&irc_tty_lock);
+		spin_lock(irc_tty_lock);
 
 		irc_input[c] = '\0';
 
@@ -1058,7 +1104,7 @@ DEFINE_SHELL_FUNCTION(irc_join, "irc channel tool") {
 			fprintf(tty, "\n");
 			sprintf(irc_payload, "PART %s\r\n", channel);
 			irc_send(irc_payload);
-			spin_unlock(&irc_tty_lock);
+			spin_unlock(irc_tty_lock);
 			break;
 		}
 
@@ -1079,7 +1125,7 @@ DEFINE_SHELL_FUNCTION(irc_join, "irc channel tool") {
 		}
 
 		memset(irc_input, 0x00, sizeof(irc_input));
-		spin_unlock(&irc_tty_lock);
+		spin_unlock(irc_tty_lock);
 	}
 	memset(irc_prompt, 0x00, sizeof(irc_prompt));
 	memset(irc_input, 0x00, sizeof(irc_input));
@@ -1112,7 +1158,7 @@ DEFINE_SHELL_FUNCTION(http, "Open a prompt to send HTTP commands.") {
 
 			/* /posting.php?mode=post&f=7 */
 
-			char * content = 
+			char * content =
 "-----------------------------2611311029845263341299213952\r\n"
 "Content-Disposition: form-data; name=\"subject\"\r\n"
 "\r\n"
@@ -1202,9 +1248,6 @@ DEFINE_SHELL_FUNCTION(rtl, "rtl8139 experiments") {
 			fprintf(tty, "COMMAND register after:  0x%4x\n", command_reg);
 		}
 
-		rtl_irq = pci_read_field(rtl_device_pci, PCI_INTERRUPT_LINE, 1);
-
-_irq_found:
 		rtl_irq = pci_read_field(rtl_device_pci, PCI_INTERRUPT_LINE, 1);
 		fprintf(tty, "Interrupt Line: %x\n", rtl_irq);
 		irq_install_handler(rtl_irq, rtl_irq_handler);
@@ -1371,6 +1414,7 @@ static int init(void) {
 	BIND_SHELL_FUNCTION(irc_test);
 	BIND_SHELL_FUNCTION(irc_init);
 	BIND_SHELL_FUNCTION(irc_join);
+	BIND_SHELL_FUNCTION(irc_log);
 	BIND_SHELL_FUNCTION(http);
 	pci_scan(&find_rtl, -1, &rtl_device_pci);
 	if (!rtl_device_pci) {

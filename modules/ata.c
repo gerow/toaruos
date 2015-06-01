@@ -26,7 +26,8 @@ struct ata_device {
 	ata_identify_t identity;
 };
 
-static volatile uint8_t ata_lock = 0;
+//static volatile uint8_t ata_lock = 0;
+static spin_lock_t ata_lock = { 0 };
 
 /* TODO support other sector sizes */
 #define ATA_SECTOR_SIZE 512
@@ -280,8 +281,9 @@ static int ata_device_detect(struct ata_device * dev) {
 		/* Nothing here */
 		return 0;
 	}
-	if (cl == 0x00 && ch == 0x00) {
-		/* Parallel ATA device */
+	if ((cl == 0x00 && ch == 0x00) ||
+	    (cl == 0x3C && ch == 0xC3)) {
+		/* Parallel ATA device, or emulated SATA */
 
 		char devname[64];
 		sprintf((char *)&devname, "/dev/hd%c", ata_drive_char);
@@ -302,7 +304,7 @@ static void ata_device_read_sector(struct ata_device * dev, uint32_t lba, uint8_
 	uint16_t bus = dev->io_base;
 	uint8_t slave = dev->slave;
 
-	spin_lock(&ata_lock);
+	spin_lock(ata_lock);
 
 	int errors = 0;
 try_again:
@@ -323,7 +325,7 @@ try_again:
 		errors++;
 		if (errors > 4) {
 			debug_print(WARNING, "-- Too many errors trying to read this block. Bailing.");
-			spin_unlock(&ata_lock);
+			spin_unlock(ata_lock);
 			return;
 		}
 		goto try_again;
@@ -332,14 +334,14 @@ try_again:
 	int size = 256;
 	inportsm(bus,buf,size);
 	ata_wait(dev, 0);
-	spin_unlock(&ata_lock);
+	spin_unlock(ata_lock);
 }
 
 static void ata_device_write_sector(struct ata_device * dev, uint32_t lba, uint8_t * buf) {
 	uint16_t bus = dev->io_base;
 	uint8_t slave = dev->slave;
 
-	spin_lock(&ata_lock);
+	spin_lock(ata_lock);
 
 	outportb(bus + ATA_REG_CONTROL, 0x02);
 
@@ -358,7 +360,7 @@ static void ata_device_write_sector(struct ata_device * dev, uint32_t lba, uint8
 	outportsm(bus,buf,size);
 	outportb(bus + 0x07, ATA_CMD_CACHE_FLUSH);
 	ata_wait(dev, 0);
-	spin_unlock(&ata_lock);
+	spin_unlock(ata_lock);
 }
 
 static int buffer_compare(uint32_t * ptr1, uint32_t * ptr2, size_t size) {

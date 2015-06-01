@@ -11,6 +11,7 @@ CC = i686-pc-toaru-gcc
 NM = i686-pc-toaru-nm
 CXX= i686-pc-toaru-g++
 AR = i686-pc-toaru-ar
+AS = i686-pc-toaru-as
 
 # Build flags
 CFLAGS  = -O2 -std=c99
@@ -19,6 +20,8 @@ CFLAGS += -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-format
 CFLAGS += -pedantic -fno-omit-frame-pointer
 CFLAGS += -D_KERNEL_
 
+ASFLAGS = --32
+
 # Kernel autoversioning with git sha
 CFLAGS += -DKERNEL_GIT_TAG=`util/make-version`
 
@@ -26,7 +29,8 @@ CFLAGS += -DKERNEL_GIT_TAG=`util/make-version`
 YASM = yasm
 
 # All of the core parts of the kernel are built directly.
-KERNEL_OBJS  = $(patsubst %.c,%.o,$(wildcard kernel/*/*.c))
+KERNEL_OBJS = $(patsubst %.c,%.o,$(wildcard kernel/*.c))
+KERNEL_OBJS += $(patsubst %.c,%.o,$(wildcard kernel/*/*.c))
 KERNEL_OBJS += $(patsubst %.c,%.o,$(wildcard kernel/*/*/*.c))
 
 # Loadable modules
@@ -39,7 +43,7 @@ HEADERS     = $(shell find kernel/include/ -type f -name '*.h')
 # Userspace build flags
 USER_CFLAGS   = -O3 -m32 -Wa,--32 -g -Iuserspace -std=c99 -U__STRICT_ANSI__
 USER_CXXFLAGS = -O3 -m32 -Wa,--32 -g -Iuserspace
-USER_BINFLAGS = 
+USER_BINFLAGS =
 
 # Userspace binaries and libraries
 USER_CFILES   = $(shell find userspace -not -wholename '*/lib/*' -name '*.c')
@@ -89,7 +93,7 @@ BOOT_MODULES += net rtl
 # which is basically -initrd "hdd/mod/%.ko,hdd/mod/%.ko..."
 # for each of the modules listed above in BOOT_MODULES
 COMMA := ,
-EMPTY := 
+EMPTY :=
 SPACE := $(EMPTY) $(EMPTY)
 BOOT_MODULES_X = -initrd "$(subst $(SPACE),$(COMMA),$(foreach mod,$(BOOT_MODULES),hdd/mod/$(mod).ko))"
 
@@ -116,10 +120,10 @@ WITH_LOGS = logtoserial=1
 .PHONY: debug debug-kvm debug-term debug-term-kvm
 
 # Prevents Make from removing intermediary files on failure
-.SECONDARY: 
+.SECONDARY:
 
 # Disable built-in rules
-.SUFFIXES: 
+.SUFFIXES:
 
 all: system tags userspace
 system: toaruos-disk.img toaruos-kernel modules
@@ -160,29 +164,26 @@ test: system
 toolchain:
 	@cd toolchain; ./toolchain-build.sh
 
+KERNEL_ASMOBJS = $(filter-out kernel/symbols.o,$(patsubst %.S,%.o,$(wildcard kernel/*.S)))
+
 ################
 #    Kernel    #
 ################
-toaruos-kernel: kernel/start.o kernel/link.ld kernel/main.o kernel/symbols.o ${KERNEL_OBJS}
+toaruos-kernel: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o
 	@${BEG} "CC" "$<"
-	@${CC} -T kernel/link.ld ${CFLAGS} -nostdlib -o toaruos-kernel kernel/*.o ${KERNEL_OBJS} -lgcc ${ERRORS}
+	@${CC} -T kernel/link.ld ${CFLAGS} -nostdlib -o toaruos-kernel ${KERNEL_ASMOBJS} ${KERNEL_OBJS} kernel/symbols.o -lgcc ${ERRORS}
 	@${END} "CC" "$<"
 	@${INFO} "--" "Kernel is ready!"
 
-kernel/symbols.o: ${KERNEL_OBJS} util/generate_symbols.py
+kernel/symbols.o: ${KERNEL_ASMOBJS} ${KERNEL_OBJS} util/generate_symbols.py
 	@-rm -f kernel/symbols.o
-	@${BEG} "nm" "Generating symbol list..."
-	@${CC} -T kernel/link.ld ${CFLAGS} -nostdlib -o toaruos-kernel kernel/*.o ${KERNEL_OBJS} -lgcc ${ERRORS}
-	@${NM} toaruos-kernel -g | python2 util/generate_symbols.py > kernel/symbols.s
-	@${END} "nm" "Generated symbol list."
-	@${BEG} "yasm" "kernel/symbols.s"
-	@${YASM} -f elf -o $@ kernel/symbols.s ${ERRORS}
-	@${END} "yasm" "kernel/symbols.s"
-
-kernel/start.o: kernel/start.s
-	@${BEG} "yasm" "$<"
-	@${YASM} -f elf -o $@ $< ${ERRORS}
-	@${END} "yasm" "$<"
+	@${BEG} "NM" "Generating symbol list..."
+	@${CC} -T kernel/link.ld ${CFLAGS} -nostdlib -o toaruos-kernel ${KERNEL_ASMOBJS} ${KERNEL_OBJS} -lgcc ${ERRORS}
+	@${NM} toaruos-kernel -g | python2 util/generate_symbols.py > kernel/symbols.S
+	@${END} "NM" "Generated symbol list."
+	@${BEG} "AS" "kernel/symbols.S"
+	@${AS} ${ASFLAGS} kernel/symbols.S -o $@ ${ERRORS}
+	@${END} "AS" "kernel/symbols.S"
 
 kernel/sys/version.o: kernel/*/*.c kernel/*.c
 
@@ -190,6 +191,11 @@ hdd/mod/%.ko: modules/%.c ${HEADERS}
 	@${BEG} "CC" "$< [module]"
 	@${CC} -T modules/link.ld -I./kernel/include -nostdlib ${CFLAGS} -c -o $@ $< ${ERRORS}
 	@${END} "CC" "$< [module]"
+
+kernel/%.o: kernel/%.S
+	@${BEG} "AS" "$<"
+	@${AS} ${ASFLAGS} $< -o $@ ${ERRORS}
+	@${END} "AS" "$<"
 
 kernel/%.o: kernel/%.c ${HEADERS}
 	@${BEG} "CC" "$<"
@@ -255,11 +261,11 @@ tags: kernel/*/*.c kernel/*.c userspace/**/*.c modules/*.c
 ###############
 
 clean-soft:
-	@${BEGRM} "RM" "Cleaning modules..."
+	@${BEGRM} "RM" "Cleaning kernel objects..."
 	@-rm -f kernel/*.o
 	@-rm -f kernel/*/*.o
 	@-rm -f ${KERNEL_OBJS}
-	@${ENDRM} "RM" "Cleaned modules"
+	@${ENDRM} "RM" "Cleaned kernel objects"
 
 clean-user:
 	@${BEGRM} "RM" "Cleaning userspace products..."
