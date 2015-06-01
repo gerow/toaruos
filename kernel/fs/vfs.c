@@ -844,12 +844,23 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 		 * of a path. depth == path_depth ensures this is only done for a leaf and final ensures
 		 * we don't try to do this on recursive symlink resolutions.
 		 */
+		node_next = finddir_fs(node_ptr, path_offset);
+		free(node_ptr);
+		node_ptr = node_next;
+		if (!node_ptr) {
+			/* We failed to find the requested directory */
+			free((void *)path);
+			return NULL;
+		}
+		if (node_ptr->flags & FS_SYMLINK) {
+			debug_print(CRITICAL, "%s is a symlink", path_offset);
+		}
 		if ((node_ptr->flags & FS_SYMLINK) &&
 				!((flags & O_NOFOLLOW) && (flags & O_PATH) && depth == path_depth - 1 && final)) {
 			/* This ensures we don't return a path when NOFOLLOW is requested but PATH
 			 * isn't passed.
 			 */
-			debug_print(WARNING, "resolving symlink at %s", node_ptr->name);
+			debug_print(CRITICAL, "resolving symlink at %s", node_ptr->name);
 			if ((flags & O_NOFOLLOW) && depth == path_depth - 1 && final) {
 				debug_print(WARNING, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
 				free((void *)path);
@@ -881,12 +892,13 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			char *relpath = malloc(path_len + 1);
 			char *ptr = relpath;
 			memcpy(relpath, path, path_len + 1);
-			for (unsigned int i = 0; i < depth - 1; i++) {
+			for (unsigned int i = 0; i < depth; i++) {
 				while(*ptr != '\0') {
 					ptr++;
 				}
 				*ptr = PATH_SEPARATOR;
 			}
+			debug_print(WARNING, "relpath is %s", relpath);
 			node_ptr = kopen_recur(symlink_buf, flags, symlink_depth + 1, 0, relpath);
 			free(relpath);
 			free(old_node_ptr);
@@ -897,14 +909,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 				return NULL;
 			}
 		}
-		node_next = finddir_fs(node_ptr, path_offset);
-		free(node_ptr);
-		node_ptr = node_next;
-		if (!node_ptr) {
-			/* We failed to find the requested directory */
-			free((void *)path);
-			return NULL;
-		} else if (depth == path_depth - 1) {
+		if (depth == path_depth - 1) {
 			/* We found the file and are done, open the node */
 			open_fs(node_ptr, flags);
 			free((void *)path);
