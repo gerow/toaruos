@@ -16,7 +16,7 @@
 #include <logging.h>
 #include <hashmap.h>
 
-#define MAX_SYMLINK_DEPTH 16
+#define MAX_SYMLINK_DEPTH 8
 #define MAX_SYMLINK_SIZE 4096
 
 tree_t    * fs_tree = NULL; /* File system mountpoint tree */
@@ -268,6 +268,7 @@ int create_file_fs(char *name, uint16_t permission) {
 	free(parent_path);
 
 	if (!parent) {
+		debug_print(INSANE, "wutwutwut");
 		free(path);
 		return -1;
 	}
@@ -778,12 +779,12 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 		return NULL;
 	}
 
-	debug_print(INFO, "kopen(%s)", filename);
-
 	/* Canonicalize the (potentially relative) path... */
 	char *path = canonicalize_path(relative_to, filename);
 	/* And store the length once to save recalculations */
 	size_t path_len = strlen(path);
+
+	debug_print(CRITICAL, "path(%s) relative_to(%s)", path, relative_to);
 
 	/* If strlen(path) == 1, then path = "/"; return root */
 	if (path_len == 1) {
@@ -838,16 +839,18 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 	fs_node_t *node_next = NULL;
 	for (; depth < path_depth; ++depth) {
 		/* Search the active directory for the requested directory */
-		debug_print(INFO, "... Searching for %s", path_offset);
+		debug_print(CRITICAL, "... Searching for %s", path_offset);
 		/* This test is complicated, but basically we follow a symlink in all but one
 		 * case: when the O_NOFOLLOW and O_PATH flags are passed and this is is the leaf
 		 * of a path. depth == path_depth ensures this is only done for a leaf and final ensures
 		 * we don't try to do this on recursive symlink resolutions.
 		 */
+		debug_print(CRITICAL, "looking for %s in %s", path_offset, node_ptr->name);
 		node_next = finddir_fs(node_ptr, path_offset);
 		free(node_ptr);
 		node_ptr = node_next;
 		if (!node_ptr) {
+			debug_print(INSANE, "node_ptr is null");
 			/* We failed to find the requested directory */
 			free((void *)path);
 			return NULL;
@@ -862,30 +865,34 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			 */
 			debug_print(CRITICAL, "resolving symlink at %s", node_ptr->name);
 			if ((flags & O_NOFOLLOW) && depth == path_depth - 1 && final) {
-				/* XXX(gerow): should probably be setting errno from this */
+				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
 				return NULL;
 			}
 			if (symlink_depth >= MAX_SYMLINK_DEPTH) {
-				/* XXX(gerow): should probably be setting errno from this */
+				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Reached max symlink depth on %s.", node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
 				return NULL;
 			}
+			/* 
+			 * This may actually be big enough that we wouldn't want to allocate it on
+			 * the stack, especially considering this function is called recursively
+			 */
 			char symlink_buf[MAX_SYMLINK_SIZE];
 			int len = node_ptr->readlink(node_ptr, symlink_buf, sizeof(symlink_buf));
 			if (len < 0) {
-				/* XXX(gerow): should probably be setting errno from this */
+				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Got rv %d from symlink for %s.", len, node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
 				return NULL;
 			}
 			if (symlink_buf[len - 1] != '\0') {
-				/* XXX(gerow): should probably be setting errno from this */
+				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
@@ -940,6 +947,8 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
  * @returns A file system node element that the caller can free.
  */
 fs_node_t *kopen(char *filename, uint32_t flags) {
+	debug_print(INFO, "kopen(%s)", filename);
+
 	return kopen_recur(filename, flags, 0, 1, (char *)(current_process->wd_name));
 }
 
