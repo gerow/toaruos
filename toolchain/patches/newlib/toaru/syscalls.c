@@ -322,8 +322,8 @@ char *getwd(char *buf) {
 	return getcwd(buf, 256);
 }
 
-int lstat(const char *path, struct stat *buf) {
-	int ret = syscall_lstat((char *)file, (void *)st);
+int lstat(const char *path, struct stat *st) {
+	int ret = syscall_lstat((char *)path, (void *)st);
 	if (ret >= 0) {
 		return ret;
 	} else {
