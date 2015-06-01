@@ -862,12 +862,14 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			 */
 			debug_print(CRITICAL, "resolving symlink at %s", node_ptr->name);
 			if ((flags & O_NOFOLLOW) && depth == path_depth - 1 && final) {
+				/* XXX(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
 				return NULL;
 			}
 			if (symlink_depth >= MAX_SYMLINK_DEPTH) {
+				/* XXX(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Reached max symlink depth on %s.", node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
@@ -876,12 +878,14 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			char symlink_buf[MAX_SYMLINK_SIZE];
 			int len = node_ptr->readlink(node_ptr, symlink_buf, sizeof(symlink_buf));
 			if (len < 0) {
+				/* XXX(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Got rv %d from symlink for %s.", len, node_ptr->name);
 				free((void *)path);
 				free(node_ptr);
 				return NULL;
 			}
 			if (symlink_buf[len - 1] != '\0') {
+				/* XXX(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
 				free((void *)path);
 				free(node_ptr);

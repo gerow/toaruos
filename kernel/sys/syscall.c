@@ -671,7 +671,7 @@ static int sys_symlink(char * target, char * name) {
 
 static int sys_readlink(const char * file, char * ptr, int len) {
 	PTR_VALIDATE(file);
-	fs_node_t * node = kopen((char *) file, 0);
+	fs_node_t * node = kopen((char *) file, O_PATH | O_NOFOLLOW);
 	if (!node) {
 		return -ENOENT;
 	}
