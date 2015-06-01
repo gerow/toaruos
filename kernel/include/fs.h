@@ -15,6 +15,8 @@
 #define O_CREAT      0x0200
 #define O_TRUNC      0x0400
 #define O_EXCL       0x0800
+#define O_NOFOLLOW   0x1000
+#define O_PATH       0x2000
 
 #define FS_FILE        0x01
 #define FS_DIRECTORY   0x02

@@ -16,6 +16,9 @@
 #include <logging.h>
 #include <hashmap.h>
 
+#define MAX_SYMLINK_DEPTH 16
+#define MAX_SYMLINK_SIZE 4096
+
 tree_t    * fs_tree = NULL; /* File system mountpoint tree */
 fs_node_t * fs_root = NULL; /* Pointer to the root mount fs_node (must be some form of filesystem, even ramdisk) */
 
@@ -769,20 +772,7 @@ fs_node_t *get_mount_point(char * path, unsigned int path_depth, char **outpath,
 
 
 
-
-
-/**
- * kopen: Open a file by name.
- *
- * Explore the file system tree to find the appropriate node for
- * for a given path. The path can be relative to the working directory
- * and will be canonicalized by the kernel.
- *
- * @param filename Filename to open
- * @param flags    Flag bits for read/write mode.
- * @returns A file system node element that the caller can free.
- */
-fs_node_t *kopen(char *filename, uint32_t flags) {
+fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, uint32_t final, char *relative_to) {
 	/* Simple sanity checks that we actually have a file system */
 	if (!filename) {
 		return NULL;
@@ -790,10 +780,8 @@ fs_node_t *kopen(char *filename, uint32_t flags) {
 
 	debug_print(INFO, "kopen(%s)", filename);
 
-	/* Reference the current working directory */
-	char *cwd = (char *)(current_process->wd_name);
 	/* Canonicalize the (potentially relative) path... */
-	char *path = canonicalize_path(cwd, filename);
+	char *path = canonicalize_path(relative_to, filename);
 	/* And store the length once to save recalculations */
 	size_t path_len = strlen(path);
 
@@ -851,6 +839,47 @@ fs_node_t *kopen(char *filename, uint32_t flags) {
 	for (; depth < path_depth; ++depth) {
 		/* Search the active directory for the requested directory */
 		debug_print(INFO, "... Searching for %s", path_offset);
+		/* This test is complicated, but basically we follow a symlink in all but one
+		 * case: when the O_NOFOLLOW and O_PATH flags are passed and this is is the leaf
+		 * of a path. depth == path_depth ensures this is only done for a leaf and final ensures
+		 * we don't try to do this on recursive symlink resolutions.
+		 */
+		if ((node_ptr->flags & FS_SYMLINK) &&
+				!((flags & O_NOFOLLOW) && (flags & O_PATH) && depth == path_depth - 1 && final)) {
+			/* This ensures we don't return a path when NOFOLLOW is requested but PATH
+			 * isn't passed.
+			 */
+			if ((flags & O_NOFOLLOW) && depth == path_depth - 1 && final) {
+				debug_print(INFO, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
+				free((void *)path);
+				return NULL;
+			}
+			if (symlink_depth >= MAX_SYMLINK_DEPTH) {
+				debug_print(INFO, "Reached max symlink depth on %s.", node_ptr->name);
+				free((void *)path);
+				return NULL;
+			}
+			char symlink_buf[MAX_SYMLINK_SIZE];
+			int len = node_ptr->readlink(node_ptr, symlink_buf, sizeof(symlink_buf));
+			if (len < 0) {
+				debug_print(INFO, "Got rv %d from symlink for %s.", len, node_ptr->name);
+				free((void *)path);
+				return NULL;
+			}
+			if (symlink_buf[len - 1] != '\0') {
+				debug_print(INFO, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
+				free((void *)path);
+				return NULL;
+			}
+			fs_node_t * old_node_ptr = node_ptr;
+			/* FIXME */
+			node_ptr = kopen_recur(symlink_buf, flags, symlink_depth + 1, 0, "");
+			free(old_node_ptr);
+			if (!node_ptr) {
+				/* Dangling symlink? */
+				debug_print(INFO, "Failed to open symlink path %s. Perhaps it's a dangling symlink?", symlink_buf);
+			}
+		}
 		node_next = finddir_fs(node_ptr, path_offset);
 		free(node_ptr);
 		node_ptr = node_next;
@@ -871,5 +900,20 @@ fs_node_t *kopen(char *filename, uint32_t flags) {
 	/* We failed to find the requested file, but our loop terminated. */
 	free((void *)path);
 	return NULL;
+}
+
+/**
+ * kopen: Open a file by name.
+ *
+ * Explore the file system tree to find the appropriate node for
+ * for a given path. The path can be relative to the working directory
+ * and will be canonicalized by the kernel.
+ *
+ * @param filename Filename to open
+ * @param flags    Flag bits for read/write mode.
+ * @returns A file system node element that the caller can free.
+ */
+fs_node_t *kopen(char *filename, uint32_t flags) {
+	return kopen_recur(filename, flags, 0, 1, (char *)(current_process->wd_name));
 }
 
