@@ -849,35 +849,52 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			/* This ensures we don't return a path when NOFOLLOW is requested but PATH
 			 * isn't passed.
 			 */
+			debug_print(WARNING, "resolving symlink at %s", node_ptr->name);
 			if ((flags & O_NOFOLLOW) && depth == path_depth - 1 && final) {
-				debug_print(INFO, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
+				debug_print(WARNING, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
 				free((void *)path);
+				free(node_ptr);
 				return NULL;
 			}
 			if (symlink_depth >= MAX_SYMLINK_DEPTH) {
-				debug_print(INFO, "Reached max symlink depth on %s.", node_ptr->name);
+				debug_print(WARNING, "Reached max symlink depth on %s.", node_ptr->name);
 				free((void *)path);
+				free(node_ptr);
 				return NULL;
 			}
 			char symlink_buf[MAX_SYMLINK_SIZE];
 			int len = node_ptr->readlink(node_ptr, symlink_buf, sizeof(symlink_buf));
 			if (len < 0) {
-				debug_print(INFO, "Got rv %d from symlink for %s.", len, node_ptr->name);
+				debug_print(WARNING, "Got rv %d from symlink for %s.", len, node_ptr->name);
 				free((void *)path);
+				free(node_ptr);
 				return NULL;
 			}
 			if (symlink_buf[len - 1] != '\0') {
-				debug_print(INFO, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
+				debug_print(WARNING, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
 				free((void *)path);
+				free(node_ptr);
 				return NULL;
 			}
 			fs_node_t * old_node_ptr = node_ptr;
-			/* FIXME */
-			node_ptr = kopen_recur(symlink_buf, flags, symlink_depth + 1, 0, "");
+			/* Rebuild our path up to this point. This is hella hacky. */
+			char *relpath = malloc(path_len + 1);
+			char *ptr = relpath;
+			memcpy(relpath, path, path_len + 1);
+			for (unsigned int i = 0; i < depth - 1; i++) {
+				while(*ptr != '\0') {
+					ptr++;
+				}
+				*ptr = PATH_SEPARATOR;
+			}
+			node_ptr = kopen_recur(symlink_buf, flags, symlink_depth + 1, 0, relpath);
+			free(relpath);
 			free(old_node_ptr);
 			if (!node_ptr) {
 				/* Dangling symlink? */
-				debug_print(INFO, "Failed to open symlink path %s. Perhaps it's a dangling symlink?", symlink_buf);
+				debug_print(WARNING, "Failed to open symlink path %s. Perhaps it's a dangling symlink?", symlink_buf);
+				free((void *)path);
+				return NULL;
 			}
 		}
 		node_next = finddir_fs(node_ptr, path_offset);
