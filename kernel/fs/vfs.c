@@ -828,6 +828,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 	unsigned int depth = 0;
 	/* Find the mountpoint for this file */
 	fs_node_t *node_ptr = get_mount_point(path, path_depth, &path_offset, &depth);
+	debug_print(CRITICAL, "path_offset: %s", path_offset);
 
 	if (!node_ptr) return NULL;
 
@@ -850,7 +851,6 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 		free(node_ptr);
 		node_ptr = node_next;
 		if (!node_ptr) {
-			debug_print(INSANE, "node_ptr is null");
 			/* We failed to find the requested directory */
 			free((void *)path);
 			return NULL;
@@ -894,6 +894,10 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			if (symlink_buf[len - 1] != '\0') {
 				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
+				debug_print(WARNING, "%c", symlink_buf[len - 1]);
+				symlink_buf[len - 1] = '\0';
+				debug_print(WARNING, "%s", symlink_buf);
+				debug_print(WARNING, "got length %d", len);
 				free((void *)path);
 				free(node_ptr);
 				return NULL;
