@@ -829,6 +829,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 	/* Find the mountpoint for this file */
 	fs_node_t *node_ptr = get_mount_point(path, path_depth, &path_offset, &depth);
 	debug_print(CRITICAL, "path_offset: %s", path_offset);
+	debug_print(CRITICAL, "depth: %d", depth);
 
 	if (!node_ptr) return NULL;
 
@@ -848,6 +849,9 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 		 */
 		debug_print(CRITICAL, "looking for %s in %s", path_offset, node_ptr->name);
 		node_next = finddir_fs(node_ptr, path_offset);
+		if (!node_next) {
+			debug_print(WARNING, "No entry for %s in %s", path_offset, node_ptr->name);
+		}
 		free(node_ptr);
 		node_ptr = node_next;
 		if (!node_ptr) {
@@ -914,7 +918,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 				*ptr = PATH_SEPARATOR;
 			}
 			debug_print(WARNING, "relpath is %s", relpath);
-			node_ptr = kopen_recur(symlink_buf, flags, symlink_depth + 1, 0, relpath);
+			node_ptr = kopen_recur(symlink_buf, 0, symlink_depth + 1, 0, relpath);
 			free(relpath);
 			free(old_node_ptr);
 			if (!node_ptr) {
@@ -951,7 +955,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
  * @returns A file system node element that the caller can free.
  */
 fs_node_t *kopen(char *filename, uint32_t flags) {
-	debug_print(INFO, "kopen(%s)", filename);
+	debug_print(WARNING, "kopen(%s)", filename);
 
 	return kopen_recur(filename, flags, 0, 1, (char *)(current_process->wd_name));
 }
