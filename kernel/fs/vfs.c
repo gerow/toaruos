@@ -773,7 +773,7 @@ fs_node_t *get_mount_point(char * path, unsigned int path_depth, char **outpath,
 
 
 
-fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, uint32_t final, char *relative_to) {
+fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, char *relative_to) {
 	/* Simple sanity checks that we actually have a file system */
 	if (!filename) {
 		return NULL;
@@ -783,8 +783,6 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 	char *path = canonicalize_path(relative_to, filename);
 	/* And store the length once to save recalculations */
 	size_t path_len = strlen(path);
-
-	debug_print(CRITICAL, "path(%s) relative_to(%s)", path, relative_to);
 
 	/* If strlen(path) == 1, then path = "/"; return root */
 	if (path_len == 1) {
@@ -841,18 +839,12 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 	fs_node_t *node_next = NULL;
 	for (; depth < path_depth; ++depth) {
 		/* Search the active directory for the requested directory */
-		debug_print(CRITICAL, "... Searching for %s", path_offset);
-		/* This test is complicated, but basically we follow a symlink in all but one
-		 * case: when the O_NOFOLLOW and O_PATH flags are passed and this is is the leaf
-		 * of a path. depth == path_depth ensures this is only done for a leaf and final ensures
-		 * we don't try to do this on recursive symlink resolutions.
-		 */
-		debug_print(CRITICAL, "looking for %s in %s", path_offset, node_ptr->name);
+		debug_print(INFO, "... Searching for %s", path_offset);
 		node_next = finddir_fs(node_ptr, path_offset);
 		if (!node_next) {
 			debug_print(WARNING, "No entry for %s in %s", path_offset, node_ptr->name);
 		}
-		free(node_ptr);
+		close_fs(node_ptr);
 		node_ptr = node_next;
 		if (!node_ptr) {
 			/* We failed to find the requested directory */
@@ -860,26 +852,31 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			return NULL;
 		}
 		if (node_ptr->flags & FS_SYMLINK) {
-			debug_print(CRITICAL, "%s is a symlink", path_offset);
+			debug_print(INFO, "%s is a symlink", path_offset);
 		}
+		/* 
+		 * This test is a little complicated, but we basically always resolve symlinks in the
+		 * of a path (like /home/symlink/file) even if O_NOFOLLOW and O_PATH are set. If we are
+		 * on the leaf of the path then we will look at those flags and act accordingly
+		 */
 		if ((node_ptr->flags & FS_SYMLINK) &&
-				!((flags & O_NOFOLLOW) && (flags & O_PATH) && depth == path_depth - 1 && final)) {
+				!((flags & O_NOFOLLOW) && (flags & O_PATH) && depth == path_depth - 1)) {
 			/* This ensures we don't return a path when NOFOLLOW is requested but PATH
 			 * isn't passed.
 			 */
 			debug_print(CRITICAL, "resolving symlink at %s", node_ptr->name);
-			if ((flags & O_NOFOLLOW) && depth == path_depth - 1 && final) {
+			if ((flags & O_NOFOLLOW) && depth == path_depth - 1) {
 				/* TODO(gerow): should probably be setting errno from this */
-				debug_print(WARNING, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
+				debug_print(NOTICE, "Refusing to follow final entry for open with O_NOFOLLOW for %s.", node_ptr->name);
 				free((void *)path);
-				free(node_ptr);
+				close_fs(node_ptr);
 				return NULL;
 			}
 			if (symlink_depth >= MAX_SYMLINK_DEPTH) {
 				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "Reached max symlink depth on %s.", node_ptr->name);
 				free((void *)path);
-				free(node_ptr);
+				close_fs(node_ptr);
 				return NULL;
 			}
 			/* 
@@ -890,26 +887,22 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 			int len = node_ptr->readlink(node_ptr, symlink_buf, sizeof(symlink_buf));
 			if (len < 0) {
 				/* TODO(gerow): should probably be setting errno from this */
-				debug_print(WARNING, "Got rv %d from symlink for %s.", len, node_ptr->name);
+				debug_print(WARNING, "Got error %d from symlink for %s.", len, node_ptr->name);
 				free((void *)path);
-				free(node_ptr);
+				close_fs(node_ptr);
 				return NULL;
 			}
 			if (symlink_buf[len - 1] != '\0') {
 				/* TODO(gerow): should probably be setting errno from this */
 				debug_print(WARNING, "readlink for %s doesn't end in a null pointer. That's weird...", len, node_ptr->name);
-				debug_print(WARNING, "%c", symlink_buf[len - 1]);
-				symlink_buf[len - 1] = '\0';
-				debug_print(WARNING, "%s", symlink_buf);
-				debug_print(WARNING, "got length %d", len);
 				free((void *)path);
-				free(node_ptr);
+				close_fs(node_ptr);
 				return NULL;
 			}
 			fs_node_t * old_node_ptr = node_ptr;
 			/* Rebuild our path up to this point. This is hella hacky. */
-			char *relpath = malloc(path_len + 1);
-			char *ptr = relpath;
+			char * relpath = malloc(path_len + 1);
+			char * ptr = relpath;
 			memcpy(relpath, path, path_len + 1);
 			for (unsigned int i = 0; i < depth; i++) {
 				while(*ptr != '\0') {
@@ -917,10 +910,9 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
 				}
 				*ptr = PATH_SEPARATOR;
 			}
-			debug_print(WARNING, "relpath is %s", relpath);
-			node_ptr = kopen_recur(symlink_buf, 0, symlink_depth + 1, 0, relpath);
+			node_ptr = kopen_recur(symlink_buf, 0, symlink_depth + 1, relpath);
 			free(relpath);
-			free(old_node_ptr);
+			close_fs(old_node_ptr);
 			if (!node_ptr) {
 				/* Dangling symlink? */
 				debug_print(WARNING, "Failed to open symlink path %s. Perhaps it's a dangling symlink?", symlink_buf);
@@ -955,8 +947,8 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, u
  * @returns A file system node element that the caller can free.
  */
 fs_node_t *kopen(char *filename, uint32_t flags) {
-	debug_print(WARNING, "kopen(%s)", filename);
+	debug_print(NOTICE, "kopen(%s)", filename);
 
-	return kopen_recur(filename, flags, 0, 1, (char *)(current_process->wd_name));
+	return kopen_recur(filename, flags, 0, (char *)(current_process->wd_name));
 }
 
