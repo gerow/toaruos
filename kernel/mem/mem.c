@@ -139,10 +139,12 @@ void
 set_frame(
 		uintptr_t frame_addr
 		) {
-	uint32_t frame  = frame_addr / 0x1000;
-	uint32_t index  = INDEX_FROM_BIT(frame);
-	uint32_t offset = OFFSET_FROM_BIT(frame);
-	frames[index] |= (0x1 << offset);
+	if (frame_addr < nframes * 4 * 0x400) {
+		uint32_t frame  = frame_addr / 0x1000;
+		uint32_t index  = INDEX_FROM_BIT(frame);
+		uint32_t offset = OFFSET_FROM_BIT(frame);
+		frames[index] |= (0x1 << offset);
+	}
 }
 
 void
@@ -246,9 +248,7 @@ dma_frame(
 	page->rw      = (is_writeable) ? 1 : 0;
 	page->user    = (is_kernel)    ? 0 : 1;
 	page->frame   = address / 0x1000;
-	if (address < nframes * 4 * 0x400) {
-		set_frame(address);
-	}
+	set_frame(address);
 }
 
 void
@@ -286,7 +286,7 @@ uintptr_t memory_total(){
 void paging_install(uint32_t memsize) {
 	nframes = memsize  / 4;
 	frames  = (uint32_t *)kmalloc(INDEX_FROM_BIT(nframes * 8));
-	memset(frames, 0, INDEX_FROM_BIT(nframes));
+	memset(frames, 0, INDEX_FROM_BIT(nframes * 8));
 
 	uintptr_t phys;
 	kernel_directory = (page_directory_t *)kvmalloc_p(sizeof(page_directory_t),&phys);
