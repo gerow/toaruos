@@ -1318,7 +1318,7 @@ static void symlink_ext2(fs_node_t * parent, char * target, char * name) {
 	create_entry(parent, name, inode_no);
 
 
-	/* If we didn't embed it in the inode just use write_ext2 to finish the job */
+	/* If we didn't embed it in the inode just use write_inode_buffer to finish the job */
 	if (!embedded) {
 		write_inode_buffer(parent->device, inode, inode_no, 0, target_len, (uint8_t *)target);
 	}
