@@ -20,15 +20,15 @@ int main(int argc, char ** argv) {
 		return 1;
 	}
 
-	//FILE * fd = stdin;
-	//fd = fopen(argv[1], "r");
-	//if (!fd) {
-	//	return 1;
-	//}
-	//fclose(fd);
+	FILE * fd = stdin;
+	fd = fopen(argv[1], "r");
+	if (!fd) {
+		return 1;
+	}
+	fclose(fd);
 
 	struct stat _stat;
-	stat(argv[1], &_stat);
+	lstat(argv[1], &_stat);
 
 	printf("0x%x bytes\n", _stat.st_size);
 

@@ -260,7 +260,7 @@ static int stat_node(fs_node_t * fn, uintptr_t st) {
 
 	if (!fn) {
 		memset(f, 0x00, sizeof(struct stat));
-		debug_print(WARNING, "stat: This file doesn't exist");
+		debug_print(INFO, "stat: This file doesn't exist");
 		return -1;
 	}
 	f->st_dev   = 0;

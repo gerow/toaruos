@@ -268,7 +268,6 @@ int create_file_fs(char *name, uint16_t permission) {
 	free(parent_path);
 
 	if (!parent) {
-		debug_print(INSANE, "wutwutwut");
 		free(path);
 		return -1;
 	}
@@ -841,18 +840,12 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 		/* Search the active directory for the requested directory */
 		debug_print(INFO, "... Searching for %s", path_offset);
 		node_next = finddir_fs(node_ptr, path_offset);
-		if (!node_next) {
-			debug_print(WARNING, "No entry for %s in %s", path_offset, node_ptr->name);
-		}
 		close_fs(node_ptr);
 		node_ptr = node_next;
 		if (!node_ptr) {
 			/* We failed to find the requested directory */
 			free((void *)path);
 			return NULL;
-		}
-		if (node_ptr->flags & FS_SYMLINK) {
-			debug_print(INFO, "%s is a symlink", path_offset);
 		}
 		/* 
 		 * This test is a little complicated, but we basically always resolve symlinks in the

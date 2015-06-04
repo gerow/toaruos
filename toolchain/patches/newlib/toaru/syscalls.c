@@ -329,7 +329,7 @@ int lstat(const char *path, struct stat *st) {
 	} else {
 		errno = -ret;
 		memset(st, 0x00, sizeof(struct stat));
-		return ret;;
+		return ret;
 	}
 }
 
