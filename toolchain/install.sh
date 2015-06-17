@@ -5,10 +5,10 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $DIR/util.sh
 
 # Build everything by default.
-BUILD_BINUTILS=true
-BUILD_GCC=true
-BUILD_NEWLIB=true
-BUILD_LIBSTDCPP=true
+BUILD_BINUTILS=false
+BUILD_GCC=false
+BUILD_NEWLIB=false
+BUILD_LIBSTDCPP=false
 BUILD_ZLIB=true
 BUILD_FREETYPE=true
 BUILD_PNG=true
@@ -142,7 +142,7 @@ pushd build
     if $BUILD_ZLIB; then
         # XXX zlib can not be built in a separate directory
         pushd $DIR/tarballs/zlib*
-            CC=i686-pc-toaru-gcc ./configure --static --prefix=$VIRTPREFIX || bail
+            RANLIB=i686-pc-toaru-ranlib AR=i686-pc-toaru-ar CC=i686-pc-toaru-gcc ./configure --static --prefix=$VIRTPREFIX --uname=Linux || bail
             make || bail
             make DESTDIR=$TOARU_SYSROOT install || bail
         popd
