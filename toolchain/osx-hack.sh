@@ -9,7 +9,7 @@ paste pathchk pinky pr printenv printf ptx pwd readlink realpath rm rmdir \
 runcon seq sha1sum sha224sum sha256sum sha384sum sha512sum shred shuf sleep \
 sort split stat stty sum sync tac tail tee test timeout touch tr true \
 truncate tsort tty uname unexpand uniq unlink uptime users vdir wc who \
-whoami yes sed"
+whoami yes sed find"
 
 pushd "$DIR" > /dev/null
     if [ ! -d local ]; then
