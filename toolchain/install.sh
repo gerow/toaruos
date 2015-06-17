@@ -5,10 +5,10 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $DIR/util.sh
 
 # Build everything by default.
-BUILD_BINUTILS=false
-BUILD_GCC=false
-BUILD_NEWLIB=false
-BUILD_LIBSTDCPP=false
+BUILD_BINUTILS=true
+BUILD_GCC=true
+BUILD_NEWLIB=true
+BUILD_LIBSTDCPP=true
 BUILD_ZLIB=true
 BUILD_FREETYPE=true
 BUILD_PNG=true
