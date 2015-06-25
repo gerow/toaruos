@@ -1,0 +1,41 @@
+Description for distributable package *.bento
+
+TOARU/* used for configuration information. All these files should end in
+newlines.
+TOARU/setup used to run scripts at install/upgrade/removal time
+
+Can be called with arguments depending upon situation:
+  ./setup prepare $OLD_VERSION $NEW_VERSION    -- called before dependencies are installed
+  ./setup install $OLD_VERSION  $NEW_VERSION   -- called before files are copied
+  ./setup configure $OLD_VERSION  $NEW_VERSION -- called after files are copied
+  ./setup prepare-remove $OLD_VERSION          -- called before remove takes place
+  ./setup remove $OLD_VERSION                  -- called after files on filesystem are removed
+
+In case the package is not already installed the old_version will just be "-1"
+
+TOARU/name Name of the package. Example: libpng0
+TOARU/version Version of the package. The only dividing characters between
+  version specifiers are '.' and '-' and significance is from left to right
+  regardless of the divider used. Example: 1.0.2-0
+TOARU/depends Dependencies of the package. Each dependency is listed on its own
+  line along with a version specifier. Using '*' for the version specifier
+  means "any version". Using '>', '<', '>=', '<=', or '=' before a version
+  means the package depends on a specific set of versions of the package.
+
+  Example:
+  libpng0 >1.0
+  libzlib0 *
+  libarchive0 <=2.5.3-2
+TOARU/architecture The architecture of the package. Only valid values now are
+  "i386" or "any". "any" is meant for packages that don't have any kind of
+  architecture dependency such us a collection of desktop wallpapers.
+TOARU/format Is a version number for the package format. Only valid value now
+is 1.
+
+The rest of the files in the package are simply merged into the filesystem.
+The ownership and permissions of these files are the same as what are in the
+archive, so using something like fakeroot to build the package would make
+sense.
+
+The packaging file itself is just a gzipped tarball of the file structure
+described above.
