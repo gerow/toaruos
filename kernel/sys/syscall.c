@@ -424,6 +424,70 @@ static int sys_chdir(char * newdir) {
 	}
 }
 
+static int sys_fchdir(int fd) {
+	if (!FD_CHECK(fd)) {
+		return -EBADF;
+	}
+	fs_node_t * node = FD_ENTRY(fd);
+	if ((node->flags & FS_DIRECTORY) == 0) {
+		return -ENOTDIR;
+	}
+
+	list_t path_parts;
+	memset(&path_parts, 0, sizeof(path_parts));
+
+	fs_node_t * cur = node;
+
+	while (cur != fs_root) {
+		list_insert(&path_parts, cur);
+		cur = finddir_fs(cur, "..");
+	}
+
+	int rv = 0;
+	char buf[4096];
+	char * buf_ptr = buf;
+	*buf_ptr = '/';
+	buf_ptr++;
+	while (path_parts.length) {
+		node_t * list_node = list_pop(&path_parts);
+		cur = list_node->value;
+		free(list_node);
+		size_t name_len = strlen(cur->name);
+		if (name_len + 1 > sizeof(buf) - (buf_ptr - buf)) {
+			/* We're out of room! */
+			rv = -ENAMETOOLONG;
+			goto fchdir_cleanup;
+		}
+		strcpy(cur->name, buf_ptr);
+		buf_ptr += name_len;
+		*buf_ptr = '/';
+		buf_ptr++;
+		/* Free all except the last one */
+		if (path_parts.length != 0) {
+			close_fs(cur);
+		}
+	}
+	buf_ptr--;
+	*buf_ptr = '\0';
+
+	free(current_process->wd_name);
+	current_process->wd_name = malloc(strlen(buf) + 1);
+	memcpy(current_process->wd_name, buf, strlen(buf) + 1);
+
+fchdir_cleanup:
+	while (path_parts.length) {
+		node_t * list_node = list_pop(&path_parts);
+		cur = list_node->value;
+		free(list_node);
+		/* Free all except the last one */
+		if (path_parts.length != 0) {
+			close_fs(cur);
+		}
+	}
+
+	return rv;
+}
+
 static int sys_getcwd(char * buf, size_t size) {
 	if (buf) {
 		PTR_VALIDATE(buf);
@@ -744,6 +808,7 @@ static int (*syscalls[])() = {
 	[SYS_SYMLINK]      = sys_symlink,
 	[SYS_READLINK]     = sys_readlink,
 	[SYS_LSTAT]        = sys_lstat,
+	[SYS_FCHDIR]       = sys_fchdir,
 };
 
 uint32_t num_syscalls = sizeof(syscalls) / sizeof(*syscalls);
