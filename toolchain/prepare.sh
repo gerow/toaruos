@@ -69,7 +69,7 @@ pushd "$DIR" > /dev/null
         patc "mesa" "Mesa-7.5.2" || bail
         patc "ncurses" "ncurses-5.9" || bail
         patc "vim" "vim73" || bail
-	#patc "libarchive" "libarchive-3.1.2" || bail
+	patc "libarchive" "libarchive-3.1.2" || bail
         $INFO "patch" "Patched third-party software."
         $INFO "--" "Running additional bits..."
         installNewlibStuff "newlib-1.19.0" || bail

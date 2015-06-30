@@ -222,7 +222,7 @@ pushd build
             mkdir libarchive
 	fi
         pushd libarchive
-	    $DIR/tarballs/libarchive-3.1.2/configure --prefix=$VIRTPREFIX --host=$TARGET || bail
+	    $DIR/tarballs/libarchive-3.1.2/configure --prefix=$VIRTPREFIX --host=$TARGET --without-ppmd7 || bail
 	    make || bail
 	    make DESTDIR=$TOARU_SYSROOT install || bail
 	popd
