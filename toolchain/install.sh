@@ -5,18 +5,19 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 . $DIR/util.sh
 
 # Build everything by default.
-BUILD_BINUTILS=true
-BUILD_GCC=true
-BUILD_NEWLIB=true
-BUILD_LIBSTDCPP=true
-BUILD_ZLIB=true
-BUILD_FREETYPE=true
-BUILD_PNG=true
-BUILD_PIXMAN=true
-BUILD_CAIRO=true
-BUILD_MESA=true
-BUILD_NCURSES=true
-BUILD_VIM=true
+BUILD_BINUTILS=false
+BUILD_GCC=false
+BUILD_NEWLIB=false
+BUILD_LIBSTDCPP=false
+BUILD_ZLIB=false
+BUILD_FREETYPE=false
+BUILD_PNG=false
+BUILD_PIXMAN=false
+BUILD_CAIRO=false
+BUILD_MESA=false
+BUILD_NCURSES=false
+BUILD_VIM=false
+BUILD_LIBARCHIVE=true
 
 #BUILD_BINUTILS=false
 #BUILD_GCC=false
@@ -30,6 +31,7 @@ BUILD_VIM=true
 #BUILD_MESA=false
 #BUILD_NCURSES=false
 #BUILD_VIM=false
+#BUILD_LIBARCHIVE=false
 
 echo "Building a toolchain with a sysroot of $TOARU_SYSROOT with host binaries in $PREFIX targeting $TARGET"
 
@@ -213,6 +215,17 @@ pushd build
             make || bail
             make DESTDIR=$TOARU_SYSROOT install || bail
         popd
+    fi
+
+    if $BUILD_LIBARCHIVE; then
+	if [ ! -d libarchive ]; then
+            mkdir libarchive
+	fi
+        pushd libarchive
+	    $DIR/tarballs/libarchive-3.1.2/configure --prefix=$VIRTPREFIX --host=$TARGET || bail
+	    make || bail
+	    make DESTDIR=$TOARU_SYSROOT install || bail
+	popd
     fi
 
     pushd $TOARU_SYSROOT/usr/bin || bail

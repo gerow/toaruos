@@ -1,0 +1,11 @@
+diff -rupN libarchive.new/build/autoconf/config.sub libarchive-3.1.2/build/autoconf/config.sub
+--- libarchive.new/build/autoconf/config.sub	2015-06-30 06:10:04.000000000 +0000
++++ libarchive-3.1.2/build/autoconf/config.sub	2013-02-09 17:23:12.000000000 +0000
+@@ -1355,7 +1355,6 @@ case $os in
+ 	      | -sym* | -kopensolaris* | -plan9* \
+ 	      | -amigaos* | -amigados* | -msdos* | -newsos* | -unicos* | -aof* \
+ 	      | -aos* | -aros* \
+-              | -toaru* \
+ 	      | -nindy* | -vxsim* | -vxworks* | -ebmon* | -hms* | -mvs* \
+ 	      | -clix* | -riscos* | -uniplus* | -iris* | -rtu* | -xenix* \
+ 	      | -hiux* | -386bsd* | -knetbsd* | -mirbsd* | -netbsd* \
