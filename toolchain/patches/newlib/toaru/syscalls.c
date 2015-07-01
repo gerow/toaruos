@@ -92,7 +92,7 @@ DEFN_SYSCALL5(mount, SYS_MOUNT, char *, char *, char *, unsigned long, void *);
 DEFN_SYSCALL2(symlink, SYS_SYMLINK, char *, char *);
 DEFN_SYSCALL3(readlink, SYS_READLINK, char *, char *, int);
 DEFN_SYSCALL2(lstat, SYS_LSTAT, char *, void *);
-DEFN_SYSCALL2(fchdir, SYS_FCHDIR, int);
+DEFN_SYSCALL1(fchdir, SYS_FCHDIR, int);
 
 static int toaru_debug_stubs_enabled(void) {
 	static int checked = 0;
