@@ -793,6 +793,13 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 		free(path);
 
 		open_fs(root_clone, flags);
+		char * unfettered_path = canonicalize_path(relative_to, filename);
+		if (strlen(unfettered_path) > sizeof(root_clone->path) - 1) {
+			debug_print(WARNING, "Path %s is too long to fill fs_node path value", unfettered_path);
+		} else {
+			strcpy(root_clone->path, unfettered_path);
+		}
+		free(unfettered_path);
 
 		/* And return the clone */
 		return root_clone;
@@ -833,6 +840,13 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 	if (path_offset >= path+path_len) {
 		free(path);
 		open_fs(node_ptr, flags);
+		char * unfettered_path = canonicalize_path(relative_to, filename);
+		if (strlen(unfettered_path) > sizeof(node_ptr->path) - 1) {
+			debug_print(WARNING, "Path %s is too long to fill fs_node path value", unfettered_path);
+		} else {
+			strcpy(node_ptr->path, unfettered_path);
+		}
+		free(unfettered_path);
 		return node_ptr;
 	}
 	fs_node_t *node_next = NULL;
@@ -916,7 +930,13 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 		if (depth == path_depth - 1) {
 			/* We found the file and are done, open the node */
 			open_fs(node_ptr, flags);
-			free((void *)path);
+			char * unfettered_path = canonicalize_path(relative_to, filename);
+			if (strlen(unfettered_path) > sizeof(node_ptr->path) - 1) {
+				debug_print(WARNING, "Path %s is too long to fill fs_node path value", unfettered_path);
+			} else {
+				strcpy(node_ptr->path, unfettered_path);
+			}
+			free(unfettered_path);
 			return node_ptr;
 		}
 		/* We are still searching... */

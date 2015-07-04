@@ -108,9 +108,11 @@ static int sys_waitpid(int pid, int * status, int options) {
 }
 
 static int sys_open(const char * file, int flags, int mode) {
+	debug_print(ERROR, "%s open called", file);
 	PTR_VALIDATE(file);
 	debug_print(NOTICE, "open(%s) flags=0x%x; mode=0x%x", file, flags, mode);
 	fs_node_t * node = kopen((char *)file, flags);
+	//debug_print(ERROR, "Node's opened path is %s", node->path);
 	if (!node && (flags & O_CREAT)) {
 		debug_print(NOTICE, "- file does not exist and create was requested.");
 		/* Um, make one */
@@ -405,14 +407,14 @@ static int sys_reboot(void) {
 	return 0;
 }
 
-static int sys_chdir(char * newdir) {
-	PTR_VALIDATE(newdir);
+/* Skips ptr validation to allow fchdir to use this function */
+static int do_chdir(char * newdir) {
 	char * path = canonicalize_path(current_process->wd_name, newdir);
 	fs_node_t * chd = kopen(path, 0);
 	if (chd) {
 		if ((chd->flags & FS_DIRECTORY) == 0) {
 			close_fs(chd);
-			return -1;
+			return -ENOTDIR;
 		}
 		close_fs(chd);
 		free(current_process->wd_name);
@@ -420,72 +422,23 @@ static int sys_chdir(char * newdir) {
 		memcpy(current_process->wd_name, path, strlen(path) + 1);
 		return 0;
 	} else {
-		return -1;
+		return -ENOENT;
 	}
 }
 
+static int sys_chdir(char * newdir) {
+	PTR_VALIDATE(newdir);
+	return do_chdir(newdir);
+}
+
 static int sys_fchdir(int fd) {
+	debug_print(ERROR, "sys_fchdir called");
 	if (!FD_CHECK(fd)) {
 		return -EBADF;
 	}
 	fs_node_t * node = FD_ENTRY(fd);
-	if ((node->flags & FS_DIRECTORY) == 0) {
-		return -ENOTDIR;
-	}
-
-	list_t path_parts;
-	memset(&path_parts, 0, sizeof(path_parts));
-
-	fs_node_t * cur = node;
-
-	while (cur != fs_root) {
-		list_insert(&path_parts, cur);
-		cur = finddir_fs(cur, "..");
-	}
-
-	int rv = 0;
-	char buf[4096];
-	char * buf_ptr = buf;
-	*buf_ptr = '/';
-	buf_ptr++;
-	while (path_parts.length) {
-		node_t * list_node = list_pop(&path_parts);
-		cur = list_node->value;
-		free(list_node);
-		size_t name_len = strlen(cur->name);
-		if (name_len + 1 > sizeof(buf) - (buf_ptr - buf)) {
-			/* We're out of room! */
-			rv = -ENAMETOOLONG;
-			goto fchdir_cleanup;
-		}
-		strcpy(cur->name, buf_ptr);
-		buf_ptr += name_len;
-		*buf_ptr = '/';
-		buf_ptr++;
-		/* Free all except the last one */
-		if (path_parts.length != 0) {
-			close_fs(cur);
-		}
-	}
-	buf_ptr--;
-	*buf_ptr = '\0';
-
-	free(current_process->wd_name);
-	current_process->wd_name = malloc(strlen(buf) + 1);
-	memcpy(current_process->wd_name, buf, strlen(buf) + 1);
-
-fchdir_cleanup:
-	while (path_parts.length) {
-		node_t * list_node = list_pop(&path_parts);
-		cur = list_node->value;
-		free(list_node);
-		/* Free all except the last one */
-		if (path_parts.length != 0) {
-			close_fs(cur);
-		}
-	}
-
-	return rv;
+	debug_print(ERROR, "Node's opened path is %s", node->path);
+	return do_chdir(node->path);
 }
 
 static int sys_getcwd(char * buf, size_t size) {

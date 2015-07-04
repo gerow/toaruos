@@ -44,8 +44,10 @@ int main(int argc, char * argv[]) {
 	}
 
 	if (failed) {
+		FAIL("test-fchdir failed");
 		exit(EXIT_FAILURE);
 	}
 
+	INFO("test-fchdir passed");
 	exit(EXIT_SUCCESS);
 }
