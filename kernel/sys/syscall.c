@@ -108,11 +108,9 @@ static int sys_waitpid(int pid, int * status, int options) {
 }
 
 static int sys_open(const char * file, int flags, int mode) {
-	debug_print(ERROR, "%s open called", file);
 	PTR_VALIDATE(file);
 	debug_print(NOTICE, "open(%s) flags=0x%x; mode=0x%x", file, flags, mode);
 	fs_node_t * node = kopen((char *)file, flags);
-	//debug_print(ERROR, "Node's opened path is %s", node->path);
 	if (!node && (flags & O_CREAT)) {
 		debug_print(NOTICE, "- file does not exist and create was requested.");
 		/* Um, make one */
@@ -432,12 +430,10 @@ static int sys_chdir(char * newdir) {
 }
 
 static int sys_fchdir(int fd) {
-	debug_print(ERROR, "sys_fchdir called");
 	if (!FD_CHECK(fd)) {
 		return -EBADF;
 	}
 	fs_node_t * node = FD_ENTRY(fd);
-	debug_print(ERROR, "Node's opened path is %s", node->path);
 	return do_chdir(node->path);
 }
 
