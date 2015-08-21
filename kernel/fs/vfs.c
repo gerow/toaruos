@@ -165,6 +165,9 @@ void close_fs(fs_node_t *node) {
 		if (node->close) {
 			node->close(node);
 		}
+		if (node->path) {
+			free(node->path);
+		}
 
 		free(node);
 	}
@@ -770,7 +773,9 @@ fs_node_t *get_mount_point(char * path, unsigned int path_depth, char **outpath,
 	return last;
 }
 
-
+static void fs_node_fill_path(fs_node_t * node, char * filename, char * relative_to) {
+	node->path = canonicalize_path(relative_to, filename);
+}
 
 fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, char *relative_to) {
 	/* Simple sanity checks that we actually have a file system */
@@ -793,6 +798,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 		free(path);
 
 		open_fs(root_clone, flags);
+		fs_node_fill_path(root_clone, filename, relative_to);
 
 		/* And return the clone */
 		return root_clone;
@@ -833,6 +839,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 	if (path_offset >= path+path_len) {
 		free(path);
 		open_fs(node_ptr, flags);
+		fs_node_fill_path(node_ptr, filename, relative_to);
 		return node_ptr;
 	}
 	fs_node_t *node_next = NULL;
@@ -916,7 +923,7 @@ fs_node_t *kopen_recur(char *filename, uint32_t flags, uint32_t symlink_depth, c
 		if (depth == path_depth - 1) {
 			/* We found the file and are done, open the node */
 			open_fs(node_ptr, flags);
-			free((void *)path);
+			fs_node_fill_path(node_ptr, filename, relative_to);
 			return node_ptr;
 		}
 		/* We are still searching... */
