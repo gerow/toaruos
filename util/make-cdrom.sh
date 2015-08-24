@@ -23,7 +23,7 @@ fi
 BLACKLIST='userspace/tests/* userspace/gui/gl/teapot.c'
 
 # Rebuild
-echo "Rebuilding..."
+echo "Rebuilding... (ignore warnings about time skew, this is intentional)"
 rm $BLACKLIST
 touch -d tomorrow toaruos-disk.img
 make
@@ -50,6 +50,7 @@ EOF
 
 echo "Generating ramdisk..."
 genext2fs -B 4096 -d hdd -D util/devtable -U -b 16384 -N 1024 cdrom/ramdisk.img
+gzip cdrom/ramdisk.img
 
 echo "Installing kernel..."
 cp toaruos-kernel cdrom/kernel
