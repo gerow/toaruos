@@ -1,0 +1,23 @@
+diff -ur libarchive-3.1.2/libarchive/archive_write_set_format_iso9660.c _libarchive_source/libarchive/archive_write_set_format_iso9660.c
+--- libarchive-3.1.2/libarchive/archive_write_set_format_iso9660.c	2015-08-24 06:13:33.000000000 +0000
++++ _libarchive_source/libarchive/archive_write_set_format_iso9660.c	2015-08-24 05:54:29.000000000 +0000
+@@ -2503,13 +2503,13 @@
+ {
+ 	long offset;
+ 
+-#if defined(HAVE__GET_TIMEZONE)
+-	_get_timezone(&offset);
+-#elif defined(__CYGWIN__) || defined(__MINGW32__) || defined(__BORLANDC__) || defined(_NEWLIB_VERSION)
++//#if defined(HAVE__GET_TIMEZONE)
++//	_get_timezone(&offset);
++//#elif defined(__CYGWIN__) || defined(__MINGW32__) || defined(__BORLANDC__)
+ 	offset = _timezone;
+-#else
+-	offset = timezone;
+-#endif
++//#else
++//	offset = timezone;
++//#endif
+ 	offset *= -1;
+ 	if (tm->tm_isdst)
+ 		offset += 3600;
