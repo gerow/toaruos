@@ -8,7 +8,6 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 BUILD_BINUTILS=false
 BUILD_GCC=false
 BUILD_NEWLIB=false
-BUILD_NEWLIB=true
 BUILD_LIBSTDCPP=false
 BUILD_ZLIB=false
 BUILD_FREETYPE=false
@@ -223,7 +222,7 @@ pushd build
             mkdir libarchive
 	fi
         pushd libarchive
-	    $DIR/tarballs/libarchive-3.1.2/configure --prefix=$VIRTPREFIX --host=$TARGET --without-ppmd7 || bail
+	    $DIR/tarballs/libarchive-3.1.2/configure --prefix=$VIRTPREFIX --host=$TARGET || bail
 	    make || bail
 	    make DESTDIR=$TOARU_SYSROOT install || bail
 	popd
